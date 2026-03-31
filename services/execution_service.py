@@ -172,7 +172,7 @@ class ExecutionService:
         self._poly.warm_token_cache(token_id)
 
         # Apply slippage to limit price for buy orders
-        limit_price = trade.price * (1 + CFG["SLIPPAGE_PCT"]) if trade.direction == "yes" else trade.price
+        limit_price = trade.price + CFG["SLIPPAGE_PCT"]
 
         try:
             result = self._poly.place_market_order(token_id, amount, trade.direction, limit_price)

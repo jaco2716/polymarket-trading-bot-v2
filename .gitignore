@@ -1,0 +1,19 @@
+# Ignore environment variables file with sensitive information
+.env
+
+# Bot runtime files
+bot.log
+bot.log.*
+budget.json
+live_budget.json
+shadow_budget.json
+paper_trades.db
+paper_trades.db-shm
+paper_trades.db-wal
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Claude files
+.claude/settings.local.json

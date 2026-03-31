@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polymarket Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #0d1117; color: #e6edf3; font-family: ui-monospace, 'Cascadia Code', monospace; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #161b22; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    .card { background: #161b22; border: 1px solid #21262d; border-radius: 8px; }
+    .pos  { color: #3fb950; }
+    .neg  { color: #f85149; }
+    .muted { color: #8b949e; }
+    .badge { padding: 1px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+    .badge-yes  { background: rgba(63,185,80,.12);  color: #3fb950; }
+    .badge-no   { background: rgba(248,81,73,.12);  color: #f85149; }
+    .badge-open { background: rgba(88,166,255,.12); color: #58a6ff; }
+    .badge-won  { background: rgba(63,185,80,.12);  color: #3fb950; }
+    .badge-lost { background: rgba(248,81,73,.12);  color: #f85149; }
+    .badge-live { background: rgba(227,153,47,.15); color: #e39b2f; }
+    .badge-dry  { background: rgba(139,148,158,.12); color: #8b949e; }
+    .tab-active   { border-bottom: 2px solid #58a6ff; color: #e6edf3; }
+    .tab-inactive { border-bottom: 2px solid transparent; color: #8b949e; }
+    .tab-inactive:hover { color: #c9d1d9; }
+    .filter-on  { background: #1f6feb; color: #fff; }
+    .filter-off { background: #21262d; color: #8b949e; }
+    .filter-off:hover { background: #30363d; color: #e6edf3; }
+    tr.row:hover { background: rgba(255,255,255,.025); }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ── Header ── -->
+  <header style="background:#161b22;border-bottom:1px solid #21262d"
+          class="px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+    <div>
+      <h1 class="text-sm font-bold text-white tracking-wide" id="header-title">POLYMARKET TRADING BOT</h1>
+      <p class="text-xs muted mt-0.5" id="header-sub">Trading simulation · Option for live trading with real money</p>
+    </div>
+    <div class="text-right text-xs muted space-y-0.5">
+      <div id="last-updated">—</div>
+      <div>Refreshes in <span id="countdown-val" class="text-white">60</span>s</div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-5 space-y-4">
+
+    <!-- ── Stat cards ── -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="stat-cards">
+      <!-- skeleton -->
+      <div class="card px-4 py-4 animate-pulse"><div class="h-3 w-16 bg-gray-700 rounded mb-2"></div><div class="h-6 w-24 bg-gray-600 rounded"></div></div>
+      <div class="card px-4 py-4 animate-pulse"><div class="h-3 w-16 bg-gray-700 rounded mb-2"></div><div class="h-6 w-24 bg-gray-600 rounded"></div></div>
+      <div class="card px-4 py-4 animate-pulse"><div class="h-3 w-16 bg-gray-700 rounded mb-2"></div><div class="h-6 w-24 bg-gray-600 rounded"></div></div>
+      <div class="card px-4 py-4 animate-pulse"><div class="h-3 w-16 bg-gray-700 rounded mb-2"></div><div class="h-6 w-24 bg-gray-600 rounded"></div></div>
+    </div>
+
+    <!-- ── P&L Chart ── -->
+    <div class="card overflow-hidden">
+      <div style="border-bottom:1px solid #21262d" class="flex items-center justify-between pr-4">
+        <div class="flex">
+          <button id="chart-real-btn" onclick="switchChart('real')"
+            class="px-4 py-3 text-xs font-semibold tab-active">Real P&amp;L</button>
+          <button id="chart-live-btn" onclick="switchChart('live')"
+            class="px-4 py-3 text-xs font-semibold tab-inactive hidden">Live P&amp;L</button>
+          <button id="chart-shadow-btn" onclick="switchChart('shadow')"
+            class="px-4 py-3 text-xs font-semibold tab-inactive">Shadow Balance</button>
+        </div>
+        <span id="pnl-total" class="text-lg font-bold text-white">—</span>
+      </div>
+      <div class="p-4">
+        <div style="height:160px"><canvas id="pnl-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── Strategy comparison ── -->
+    <div class="card overflow-hidden">
+      <div style="border-bottom:1px solid #21262d" class="flex items-center justify-between pr-4">
+        <div class="flex">
+          <button id="tab-real-btn" onclick="switchTab('real')"
+            class="px-4 py-3 text-xs font-semibold tab-active">Real Trades</button>
+          <button id="tab-live-btn" onclick="switchTab('live')"
+            class="px-4 py-3 text-xs font-semibold tab-inactive hidden">Live Trades</button>
+          <button id="tab-shadow-btn" onclick="switchTab('shadow')"
+            class="px-4 py-3 text-xs font-semibold tab-inactive">Shadow Comparison</button>
+        </div>
+        <span class="text-xs muted hidden" id="shadow-hint">Set STRATEGY_MODE=shadow to collect data</span>
+      </div>
+      <div id="tab-real-content"></div>
+      <div id="tab-live-content" class="hidden"></div>
+      <div id="tab-shadow-content" class="hidden"></div>
+    </div>
+
+    <!-- ── Trade history ── -->
+    <div class="card overflow-hidden">
+      <div style="border-bottom:1px solid #21262d" class="px-4 py-3 flex flex-wrap items-center gap-y-2 justify-between">
+        <h2 class="text-xs font-semibold muted uppercase tracking-wider">Trade History</h2>
+        <div class="flex gap-1.5 flex-wrap">
+          <button onclick="setFilter('all')"      id="f-all"      class="text-xs px-3 py-1 rounded filter-on">All</button>
+          <button onclick="setFilter('open')"     id="f-open"     class="text-xs px-3 py-1 rounded filter-off">Open</button>
+          <button onclick="setFilter('resolved')" id="f-resolved" class="text-xs px-3 py-1 rounded filter-off">Resolved</button>
+          <button onclick="setFilter('live')"     id="f-live"     class="text-xs px-3 py-1 rounded filter-off hidden">Live</button>
+          <button onclick="setFilter('shadow')"   id="f-shadow"   class="text-xs px-3 py-1 rounded filter-off">Shadow</button>
+          <span class="text-xs muted self-center px-1">|</span>
+          <button onclick="setStrategyFilter('all')"            id="sf-all"            class="text-xs px-3 py-1 rounded filter-on">All Strats</button>
+          <button onclick="setStrategyFilter('haiku-analyse')"  id="sf-haiku-analyse"  class="text-xs px-3 py-1 rounded filter-off">Haiku</button>
+          <button onclick="setStrategyFilter('whale-copy')"     id="sf-whale-copy"     class="text-xs px-3 py-1 rounded filter-off">Whale</button>
+          <button onclick="setStrategyFilter('whale+haiku')"    id="sf-whale+haiku"    class="text-xs px-3 py-1 rounded filter-off">Whale+Haiku</button>
+        </div>
+        <div id="conf-filters" class="hidden flex gap-1.5">
+          <span class="text-xs muted self-center">Conf:</span>
+          <button onclick="setConfFilter('all')"       id="cf-all"       class="text-xs px-2 py-1 rounded filter-on">All</button>
+          <button onclick="setConfFilter('0.35-0.45')" id="cf-0.35-0.45" class="text-xs px-2 py-1 rounded filter-off">0.35–0.45</button>
+          <button onclick="setConfFilter('0.45-0.55')" id="cf-0.45-0.55" class="text-xs px-2 py-1 rounded filter-off">0.45–0.55</button>
+          <button onclick="setConfFilter('0.55-0.65')" id="cf-0.55-0.65" class="text-xs px-2 py-1 rounded filter-off">0.55–0.65</button>
+          <button onclick="setConfFilter('0.65+')"     id="cf-0.65+"     class="text-xs px-2 py-1 rounded filter-off">0.65+</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead style="background:#1c2128;color:#8b949e" class="uppercase tracking-wider text-xs">
+            <tr>
+              <th class="px-3 py-2 text-left">#</th>
+              <th class="px-3 py-2 text-left">Market</th>
+              <th class="px-3 py-2 text-center">Dir</th>
+              <th class="px-3 py-2 text-right">Price</th>
+              <th class="px-3 py-2 text-right">Staked</th>
+              <th class="px-3 py-2 text-left">Strategy</th>
+              <th class="px-3 py-2 text-right">Whale $</th>
+              <th class="px-3 py-2 text-center hidden" id="conf-col-header">Conf</th>
+              <th class="px-3 py-2 text-center">Status</th>
+              <th class="px-3 py-2 text-right">P&amp;L</th>
+              <th class="px-3 py-2 text-left">Date</th>
+            </tr>
+          </thead>
+          <tbody id="trades-tbody"></tbody>
+        </table>
+        <div id="trades-empty" class="hidden text-center py-10 muted text-xs">No trades yet</div>
+      </div>
+    </div>
+
+    <!-- ── Scan log ── -->
+    <div class="card overflow-hidden">
+      <div style="border-bottom:1px solid #21262d" class="px-4 py-3">
+        <h2 class="text-xs font-semibold muted uppercase tracking-wider">Recent Scans</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead style="background:#1c2128;color:#8b949e" class="uppercase tracking-wider text-xs">
+            <tr>
+              <th class="px-3 py-2 text-left">Time (UTC)</th>
+              <th class="px-3 py-2 text-right">Markets</th>
+              <th class="px-3 py-2 text-right">Signals</th>
+              <th class="px-3 py-2 text-right">Trades</th>
+            </tr>
+          </thead>
+          <tbody id="scan-tbody"></tbody>
+        </table>
+        <div id="scan-empty" class="hidden text-center py-10 muted text-xs">No scans recorded yet</div>
+      </div>
+    </div>
+
+    <p class="text-center text-xs muted pb-4">Auto-refreshes every 60 seconds · Run <code class="bg-gray-800 px-1 rounded">python3 dashboard.py</code> to keep this open alongside the bot</p>
+  </main>
+
+<script>
+let allTrades      = [];
+let shadowTrades   = [];
+let liveTrades     = [];
+let tradeFilter    = 'all';
+let strategyFilter = 'all';
+let confFilter     = 'all';
+let pnlChart       = null;
+let chartMode      = 'real';
+let cachedRealPnl  = [];
+let cachedShadowPnl = [];
+let cachedLivePnl  = [];
+let startingBudget       = 500;
+let shadowStartingBudget = 500;
+let strategyMode         = 'compete';
+let hasLiveData          = false;
+let refreshInterval      = 60;
+let countdown       = 60;
+let countdownTimer;
+
+// ── Formatters ────────────────────────────────────────────
+const sign    = n => n >= 0 ? '+' : '';
+const fmtPnl  = n => n == null ? '—' : `${sign(n)}$${Math.abs(n).toFixed(2)}`;
+const fmtDate = ts => ts ? ts.slice(0, 16).replace('T', ' ') : '—';
+const pnlCls  = n => n == null ? 'muted' : n > 0 ? 'pos' : n < 0 ? 'neg' : 'muted';
+const pnlSpan = n => `<span class="${pnlCls(n)}">${fmtPnl(n)}</span>`;
+
+// ── Stat cards ────────────────────────────────────────────
+function renderStatCards(ov) {
+  const starting = startingBudget;
+  const budgetChange = ov.budget != null ? ov.budget - starting : null;
+  const shadowStart  = ov.shadow_starting_budget || startingBudget;
+  const shadowChange = ov.shadow_budget != null ? ov.shadow_budget - shadowStart : null;
+
+  const resolvedPnl       = ov.resolved_pnl || 0;
+  const shadowResolvedPnl = ov.shadow_resolved_pnl || 0;
+
+  const cards = [];
+
+  // Live budget card (shown when live data exists)
+  if (hasLiveData) {
+    const livePnl = ov.live_total_pnl || 0;
+    const liveOpenAmt = ov.live_open_amount || 0;
+    cards.push({
+      label: 'Live Budget',
+      value: ov.live_budget != null ? `$${ov.live_budget.toFixed(2)}` : '—',
+      valueCls: 'text-yellow-400',
+      sub: `${ov.live_wins || 0}W / ${ov.live_losses || 0}L  ·  ${ov.live_open_trades || 0} open`,
+      subCls: 'muted',
+      sub2: `Live P&L: ${sign(livePnl)}$${Math.abs(livePnl).toFixed(2)}`,
+      sub2Cls: pnlCls(livePnl),
+      sub3: `In open trades: $${liveOpenAmt.toFixed(2)}`,
+      sub3Cls: 'muted',
+    });
+  }
+
+  cards.push(
+    {
+      label: 'Budget',
+      value: ov.budget != null ? `$${ov.budget.toFixed(2)}` : '—',
+      sub: budgetChange != null ? `${sign(budgetChange)}$${Math.abs(budgetChange).toFixed(2)} from $${starting}` : '',
+      subCls: pnlCls(budgetChange),
+      sub2: `Resolved P&L: ${sign(resolvedPnl)}$${Math.abs(resolvedPnl).toFixed(2)}`,
+      sub2Cls: pnlCls(resolvedPnl),
+    },
+    {
+      label: 'Shadow Budget',
+      value: ov.shadow_budget != null ? `$${ov.shadow_budget.toFixed(2)}` : '—',
+      sub: shadowChange != null ? `${sign(shadowChange)}$${Math.abs(shadowChange).toFixed(2)} from $${shadowStart}` : '',
+      subCls: pnlCls(shadowChange),
+      sub2: `Resolved P&L: ${sign(shadowResolvedPnl)}$${Math.abs(shadowResolvedPnl).toFixed(2)}`,
+      sub2Cls: pnlCls(shadowResolvedPnl),
+      sub3: `In open trades: $${(ov.shadow_open_amount || 0).toFixed(2)}`,
+      sub3Cls: 'muted',
+    },
+    {
+      label: hasLiveData ? 'Live Win Rate' : 'Win Rate',
+      value: hasLiveData
+        ? (ov.live_resolved_trades > 0 ? `${ov.live_win_rate}%` : '—')
+        : (ov.resolved_trades > 0 ? `${ov.win_rate}%` : '—'),
+      sub: hasLiveData
+        ? `${ov.live_total_trades || 0} live trades  ·  Fees: $${(ov.live_total_fees || 0).toFixed(2)}`
+        : `${ov.wins}W / ${ov.losses}L  ·  ${ov.open_trades} open / ${ov.total_trades} total`,
+      subCls: 'muted',
+    },
+  );
+
+  document.getElementById('stat-cards').innerHTML = cards.map(c => `
+    <div class="card px-4 py-4">
+      <div class="text-xs muted mb-1 uppercase tracking-wider">${c.label}</div>
+      <div class="text-2xl font-bold ${c.valueCls || 'text-white'}">${c.value}</div>
+      <div class="text-xs ${c.subCls} mt-1.5">${c.sub}</div>
+      ${c.sub2 ? `<div class="text-xs ${c.sub2Cls || 'muted'} mt-1">${c.sub2}</div>` : ''}
+      ${c.sub3 ? `<div class="text-xs ${c.sub3Cls || 'muted'} mt-1">${c.sub3}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ── Strategy table ────────────────────────────────────────
+function buildStratTable(rows, shadow) {
+  if (!rows || rows.length === 0) {
+    return `<div class="text-center py-8 muted text-xs">
+      ${shadow
+        ? 'No shadow data yet. Set <code class="bg-gray-800 px-1 rounded">STRATEGY_MODE=shadow</code> in your .env to start collecting.'
+        : 'No resolved trades yet.'}
+    </div>`;
+  }
+  const colOpen = shadow ? `<th class="px-4 py-2 text-right">Evaluated</th>` : `<th class="px-4 py-2 text-right">Open</th>`;
+  const feesCol = shadow ? `<th class="px-4 py-2 text-right">Est. Fees</th>` : '';
+  const rowsHtml = rows.map(r => {
+    const openVal = shadow ? r.total : r.open;
+    const wr = r.resolved > 0 ? `${r.win_rate}%` : '<span class="muted">—</span>';
+    const feesCell = shadow ? `<td class="px-4 py-2.5 text-right muted">$${(r.total_fees || 0).toFixed(2)}</td>` : '';
+    return `
+      <tr class="row" style="border-top:1px solid #21262d">
+        <td class="px-4 py-2.5 font-semibold text-white">${r.strategy}</td>
+        <td class="px-4 py-2.5 text-right muted">${openVal}</td>
+        <td class="px-4 py-2.5 text-right muted">${r.resolved}</td>
+        <td class="px-4 py-2.5 text-right">${wr}</td>
+        ${feesCell}
+        <td class="px-4 py-2.5 text-right font-semibold ${pnlCls(r.pnl)}">${fmtPnl(r.pnl)}</td>
+      </tr>
+    `;
+  }).join('');
+  return `
+    <table class="w-full text-xs">
+      <thead style="background:#1c2128;color:#8b949e" class="uppercase tracking-wider text-xs">
+        <tr>
+          <th class="px-4 py-2 text-left">Strategy</th>
+          ${colOpen}
+          <th class="px-4 py-2 text-right">Resolved</th>
+          <th class="px-4 py-2 text-right">Win Rate</th>
+          ${feesCol}
+          <th class="px-4 py-2 text-right">${shadow ? 'Hypothetical P&L' : 'P&L'}</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    ${shadow ? '<p class="px-4 py-2 text-xs muted" style="border-top:1px solid #21262d">Hypothetical outcomes only — no real budget was spent on shadow trades.</p>' : ''}
+  `;
+}
+
+function renderStrategyStats(data) {
+  document.getElementById('tab-real-content').innerHTML    = buildStratTable(data.real,   false);
+  document.getElementById('tab-shadow-content').innerHTML  = buildStratTable(data.shadow, true);
+  if (!data.shadow || data.shadow.length === 0) {
+    document.getElementById('shadow-hint').classList.remove('hidden');
+  } else {
+    document.getElementById('shadow-hint').classList.add('hidden');
+  }
+}
+
+function switchTab(tab) {
+  document.getElementById('tab-real-content').classList.toggle('hidden', tab !== 'real');
+  document.getElementById('tab-live-content').classList.toggle('hidden', tab !== 'live');
+  document.getElementById('tab-shadow-content').classList.toggle('hidden', tab !== 'shadow');
+  document.getElementById('tab-real-btn').className   = `px-4 py-3 text-xs font-semibold ${tab === 'real' ? 'tab-active' : 'tab-inactive'}`;
+  document.getElementById('tab-live-btn').className   = `px-4 py-3 text-xs font-semibold ${tab === 'live' ? 'tab-active' : 'tab-inactive'}`;
+  document.getElementById('tab-shadow-btn').className = `px-4 py-3 text-xs font-semibold ${tab === 'shadow' ? 'tab-active' : 'tab-inactive'}`;
+}
+
+// ── P&L Chart ─────────────────────────────────────────────
+function switchChart(mode) {
+  chartMode = mode;
+  document.getElementById('chart-real-btn').className =
+    `px-4 py-3 text-xs font-semibold ${mode === 'real' ? 'tab-active' : 'tab-inactive'}`;
+  document.getElementById('chart-live-btn').className =
+    `px-4 py-3 text-xs font-semibold ${mode === 'live' ? 'tab-active' : 'tab-inactive'}`;
+  document.getElementById('chart-shadow-btn').className =
+    `px-4 py-3 text-xs font-semibold ${mode === 'shadow' ? 'tab-active' : 'tab-inactive'}`;
+  const pts = mode === 'shadow' ? cachedShadowPnl : mode === 'live' ? cachedLivePnl : cachedRealPnl;
+  drawChart(pts, mode);
+}
+
+function drawChart(points, mode) {
+  const canvas  = document.getElementById('pnl-chart');
+  const ctx     = canvas.getContext('2d');
+  const isShadow = mode === 'shadow';
+  const isLive   = mode === 'live';
+  const latest  = points.length ? points[points.length - 1].pnl : null;
+
+  // Header value
+  if (isShadow) {
+    const change = latest != null ? latest - shadowStartingBudget : null;
+    document.getElementById('pnl-total').innerHTML = latest != null
+      ? `<span class="${pnlCls(change)}">$${latest.toFixed(2)}</span><span class="text-xs muted ml-2">(${sign(change ?? 0)}$${Math.abs(change ?? 0).toFixed(2)})</span>`
+      : '—';
+  } else {
+    const label = isLive ? 'Live ' : '';
+    document.getElementById('pnl-total').innerHTML =
+      latest != null ? `<span class="${pnlCls(latest)}">${label}${fmtPnl(latest)}</span>` : '—';
+  }
+
+  if (pnlChart) { pnlChart.destroy(); pnlChart = null; }
+
+  if (points.length <= 1) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '12px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    const emptyMsg = isShadow ? 'No resolved shadow trades yet' : isLive ? 'No resolved live trades yet' : 'No resolved trades yet';
+    ctx.fillText(emptyMsg, canvas.width / 2, 80);
+    return;
+  }
+
+  const refVal  = isShadow ? shadowStartingBudget : 0;
+  const color   = (latest ?? refVal) >= refVal ? '#3fb950' : '#f85149';
+  const grad    = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, color + '40');
+  grad.addColorStop(1, color + '00');
+
+  pnlChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: points.map(p => p.ts || 'Start'),
+      datasets: [{
+        data:            points.map(p => p.pnl),
+        borderColor:     color,
+        backgroundColor: grad,
+        fill:            true,
+        tension:         0.35,
+        pointRadius:     points.length > 40 ? 0 : 3,
+        pointHoverRadius: 5,
+        borderWidth:     2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1c2128',
+          borderColor: '#30363d',
+          borderWidth: 1,
+          titleColor: '#8b949e',
+          bodyColor: '#e6edf3',
+          callbacks: { label: c => isShadow ? ` $${c.raw.toFixed(2)}` : ` ${fmtPnl(c.raw)}` }
+        }
+      },
+      scales: {
+        x: { grid: { color: '#21262d' }, ticks: { color: '#8b949e', maxTicksLimit: 8, font: { size: 10 } } },
+        y: { grid: { color: '#21262d' }, ticks: { color: '#8b949e', font: { size: 10 }, callback: v => `$${v}` } }
+      }
+    }
+  });
+}
+
+function renderPnlChart(realPoints, shadowPoints, livePoints) {
+  cachedRealPnl   = realPoints;
+  cachedShadowPnl = shadowPoints;
+  cachedLivePnl   = livePoints || [];
+  const pts = chartMode === 'shadow' ? shadowPoints : chartMode === 'live' ? cachedLivePnl : realPoints;
+  drawChart(pts, chartMode);
+}
+
+// ── Trades table ──────────────────────────────────────────
+function setFilter(f) {
+  tradeFilter = f;
+  ['all', 'open', 'resolved', 'live', 'shadow'].forEach(id => {
+    const el = document.getElementById(`f-${id}`);
+    if (el) el.className = `text-xs px-3 py-1 rounded ${f === id ? 'filter-on' : 'filter-off'}`;
+  });
+  // Show/hide confidence filters and column header
+  document.getElementById('conf-filters').classList.toggle('hidden', f !== 'shadow');
+  document.getElementById('conf-col-header').classList.toggle('hidden', f !== 'shadow');
+  renderTradesTable();
+}
+
+function setStrategyFilter(f) {
+  strategyFilter = f;
+  ['all', 'haiku-analyse', 'whale-copy', 'whale+haiku'].forEach(id => {
+    document.getElementById(`sf-${id}`).className =
+      `text-xs px-3 py-1 rounded ${f === id ? 'filter-on' : 'filter-off'}`;
+  });
+  renderTradesTable();
+}
+
+function setConfFilter(f) {
+  confFilter = f;
+  ['all', '0.35-0.45', '0.45-0.55', '0.55-0.65', '0.65+'].forEach(id => {
+    document.getElementById(`cf-${id}`).className =
+      `text-xs px-2 py-1 rounded ${f === id ? 'filter-on' : 'filter-off'}`;
+  });
+  renderTradesTable();
+}
+
+function inConfBucket(conf, bucket) {
+  if (bucket === 'all' || conf == null) return true;
+  if (bucket === '0.35-0.45') return conf >= 0.35 && conf < 0.45;
+  if (bucket === '0.45-0.55') return conf >= 0.45 && conf < 0.55;
+  if (bucket === '0.55-0.65') return conf >= 0.55 && conf < 0.65;
+  if (bucket === '0.65+')     return conf >= 0.65;
+  return true;
+}
+
+function renderTradesTable() {
+  const tbody = document.getElementById('trades-tbody');
+  const empty = document.getElementById('trades-empty');
+
+  // Shadow trades have a different shape — render separately
+  if (tradeFilter === 'shadow') {
+    const filtered = shadowTrades.filter(t => {
+      if (!inConfBucket(t.confidence, confFilter)) return false;
+      if (strategyFilter !== 'all' && t.strategy !== strategyFilter) return false;
+      return true;
+    });
+    if (shadowTrades.length === 0) {
+      tbody.innerHTML = '';
+      empty.textContent = 'No shadow trades yet. Set STRATEGY_MODE=shadow in .env to collect data.';
+      empty.classList.remove('hidden');
+      return;
+    }
+    if (filtered.length === 0) {
+      tbody.innerHTML = '';
+      empty.textContent = strategyFilter !== 'all'
+        ? `No ${strategyFilter} shadow trades in this range.`
+        : 'No shadow trades in this confidence range.';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    tbody.innerHTML = filtered.map(t => {
+      const dirBadge = `<span class="badge ${t.direction === 'yes' ? 'badge-yes' : 'badge-no'}">${t.direction.toUpperCase()}</span>`;
+      const confHtml = t.confidence != null
+        ? `<span class="${t.confidence >= 0.65 ? 'pos' : t.confidence >= 0.50 ? 'text-yellow-400' : 'muted'}">${(t.confidence * 100).toFixed(0)}%</span>`
+        : `<span class="muted">—</span>`;
+      let statusHtml;
+      if (!t.resolved) {
+        statusHtml = `<span class="badge badge-open">PENDING</span>`;
+      } else if (t.outcome === t.direction) {
+        statusHtml = `<span class="badge badge-won">WOULD WIN</span>`;
+      } else {
+        statusHtml = `<span class="badge badge-lost">WOULD LOSE</span>`;
+      }
+      return `
+        <tr class="row" style="border-top:1px solid #21262d">
+          <td class="px-3 py-2 muted">${t.id}</td>
+          <td class="px-3 py-2" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.notes ? t.market_name + ' — ' + t.notes : t.market_name}">${t.market_name}</td>
+          <td class="px-3 py-2 text-center">${dirBadge}</td>
+          <td class="px-3 py-2 text-right muted">${t.price != null ? (t.price * 100).toFixed(1) + '%' : '—'}</td>
+          <td class="px-3 py-2 text-right muted">
+            ${t.amount != null ? '$' + t.amount.toFixed(2) : '—'}
+            ${t.fee != null ? `<div class="text-xs" style="color:#6e7681">fee $${t.fee.toFixed(2)}</div>` : ''}
+          </td>
+          <td class="px-3 py-2 muted">${t.strategy}</td>
+          <td class="px-3 py-2 text-center">${confHtml}</td>
+          <td class="px-3 py-2 text-center">${statusHtml}</td>
+          <td class="px-3 py-2 text-right font-medium">${pnlSpan(t.pnl)}</td>
+          <td class="px-3 py-2 muted">${fmtDate(t.ts)}</td>
+        </tr>
+      `;
+    }).join('');
+    return;
+  }
+
+  // Real + live trades
+  const source = tradeFilter === 'live' ? liveTrades : allTrades;
+  const list = source.filter(t => {
+    // Status filter
+    if (tradeFilter === 'open'     && t.resolved)  return false;
+    if (tradeFilter === 'resolved' && !t.resolved) return false;
+    // Strategy filter
+    if (strategyFilter !== 'all') {
+      try { if (!JSON.parse(t.tags || '[]').includes(strategyFilter)) return false; } catch { return false; }
+    }
+    return true;
+  });
+
+  if (list.length === 0) {
+    tbody.innerHTML = '';
+    empty.textContent = strategyFilter !== 'all' ? `No ${strategyFilter} trades yet` : tradeFilter === 'live' ? 'No live trades yet' : 'No trades yet';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  tbody.innerHTML = list.map(t => {
+    let tags;
+    try { tags = JSON.parse(t.tags || '[]'); } catch { tags = []; }
+    const tagStr = tags.join(', ') || '—';
+    const dirBadge = `<span class="badge ${t.direction === 'yes' ? 'badge-yes' : 'badge-no'}">${t.direction.toUpperCase()}</span>`;
+    const isLive = t.mode === 'live' || t.mode === 'live-dry';
+    const modeBadge = isLive
+      ? `<span class="badge ${t.mode === 'live' ? 'badge-live' : 'badge-dry'}">${t.mode === 'live' ? 'LIVE' : 'DRY'}</span> `
+      : '';
+    let statusHtml;
+    if (!t.resolved) {
+      statusHtml = `<span class="badge badge-open">OPEN</span>`;
+    } else if (t.outcome === t.direction) {
+      statusHtml = `<span class="badge badge-won">WON</span>`;
+    } else {
+      statusHtml = `<span class="badge badge-lost">LOST</span>`;
+    }
+    return `
+      <tr class="row" style="border-top:1px solid #21262d">
+        <td class="px-3 py-2 muted">${t.id}</td>
+        <td class="px-3 py-2" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.market_name}">${modeBadge}${t.market_name}</td>
+        <td class="px-3 py-2 text-center">${dirBadge}</td>
+        <td class="px-3 py-2 text-right muted">${t.price != null ? (t.price * 100).toFixed(1) + '%' : '—'}</td>
+        <td class="px-3 py-2 text-right">
+          ${t.amount != null ? '$' + t.amount.toFixed(2) : '—'}
+          ${t.fee != null ? `<div class="text-xs" style="color:#6e7681">fee $${t.fee.toFixed(2)}</div>` : ''}
+        </td>
+        <td class="px-3 py-2 muted">${tagStr}</td>
+        <td class="px-3 py-2 text-right muted">${t.whale_size != null ? '$' + t.whale_size.toFixed(0) : '—'}</td>
+        <td class="px-3 py-2 text-center">${statusHtml}</td>
+        <td class="px-3 py-2 text-right font-medium">${pnlSpan(t.pnl)}</td>
+        <td class="px-3 py-2 muted">${fmtDate(t.ts)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ── Scan log ──────────────────────────────────────────────
+function renderScanLog(scans) {
+  const tbody = document.getElementById('scan-tbody');
+  const empty = document.getElementById('scan-empty');
+  if (!scans || scans.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  tbody.innerHTML = scans.map(s => `
+    <tr class="row" style="border-top:1px solid #21262d">
+      <td class="px-3 py-2 muted">${fmtDate(s.ts)}</td>
+      <td class="px-3 py-2 text-right muted">${s.markets_checked}</td>
+      <td class="px-3 py-2 text-right ${s.signals_found > 0 ? 'text-yellow-400' : 'muted'}">${s.signals_found}</td>
+      <td class="px-3 py-2 text-right ${s.trades_placed  > 0 ? 'pos' : 'muted'}">${s.trades_placed}</td>
+    </tr>
+  `).join('');
+}
+
+// ── Fetch & render all ────────────────────────────────────
+async function refresh() {
+  try {
+    const [ov, strat, trades, shadow, live, pnl, shadowPnl, livePnl, scans] = await Promise.all([
+      fetch('/api/overview').then(r => r.json()),
+      fetch('/api/strategy-stats').then(r => r.json()),
+      fetch('/api/trades').then(r => r.json()),
+      fetch('/api/shadow-trades').then(r => r.json()),
+      fetch('/api/live-trades').then(r => r.json()),
+      fetch('/api/pnl-history').then(r => r.json()),
+      fetch('/api/shadow-pnl-history').then(r => r.json()),
+      fetch('/api/live-pnl-history').then(r => r.json()),
+      fetch('/api/scan-log').then(r => r.json()),
+    ]);
+    startingBudget = ov.starting_budget || 500;
+    shadowStartingBudget = ov.shadow_starting_budget || startingBudget;
+    strategyMode = ov.strategy_mode || 'compete';
+    hasLiveData = (ov.live_total_trades || 0) > 0 || ov.live_budget != null;
+    refreshInterval = Math.min(ov.scan_interval || 3600, 300);
+    const shadowPnlPoints = shadowPnl.points || shadowPnl;
+
+    // Update header based on mode
+    if (strategyMode === 'live') {
+      document.getElementById('header-title').textContent = 'POLYMARKET LIVE TRADING';
+      document.getElementById('header-sub').textContent = 'Real funds at risk · CLOB API connected';
+      document.getElementById('header-sub').style.color = '#e39b2f';
+    }
+
+    // Show/hide live UI elements
+    const showLive = hasLiveData || strategyMode === 'live';
+    document.getElementById('chart-live-btn').classList.toggle('hidden', !showLive);
+    document.getElementById('tab-live-btn').classList.toggle('hidden', !showLive);
+    document.getElementById('f-live').classList.toggle('hidden', !showLive);
+
+    renderStatCards(ov);
+    renderStrategyStats(strat);
+    allTrades    = trades;
+    shadowTrades = shadow;
+    liveTrades   = live;
+
+    // Build live strategy stats for the live tab
+    if (showLive) {
+      const liveStratMap = {};
+      for (const t of live) {
+        let tags; try { tags = JSON.parse(t.tags || '[]'); } catch { tags = []; }
+        for (const tag of tags) {
+          const s = liveStratMap[tag] || (liveStratMap[tag] = {strategy: tag, open: 0, resolved: 0, wins: 0, pnl: 0});
+          if (t.resolved) { s.resolved++; s.pnl += t.pnl || 0; if ((t.pnl || 0) > 0) s.wins++; }
+          else { s.open++; }
+        }
+      }
+      const liveStrats = Object.values(liveStratMap).map(s => ({
+        ...s, pnl: Math.round(s.pnl * 100) / 100,
+        win_rate: s.resolved > 0 ? Math.round(s.wins / s.resolved * 1000) / 10 : 0,
+      })).sort((a, b) => b.pnl - a.pnl);
+      document.getElementById('tab-live-content').innerHTML = buildStratTable(liveStrats, false);
+    }
+
+    renderTradesTable();
+    renderPnlChart(pnl, shadowPnlPoints, livePnl);
+    renderScanLog(scans);
+    document.getElementById('last-updated').textContent =
+      'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('last-updated').textContent = 'Error loading data';
+  }
+}
+
+// ── Countdown ─────────────────────────────────────────────
+function startCountdown() {
+  countdown = refreshInterval;
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    countdown--;
+    document.getElementById('countdown-val').textContent = countdown;
+    if (countdown <= 0) { refresh(); countdown = refreshInterval; }
+  }, 1000);
+}
+
+refresh();
+startCountdown();
+</script>
+</body>
+</html>

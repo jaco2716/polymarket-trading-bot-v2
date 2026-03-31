@@ -177,22 +177,28 @@ class PolymarketClient:
 
         return {"order_id": order_id, "response": resp}
 
-    def get_actual_fill_price(self, order_id: str, amount_usdc: float, fallback: float) -> float:
-        """Query CLOB API for actual fill price after a FOK order executes."""
+    def get_order_fill(self, order_id: str) -> tuple[bool, float]:
+        """Check if a FOK order was filled. Returns (was_filled, size_matched_shares)."""
         try:
             order = self.get_client().get_order(order_id)
             if not isinstance(order, dict):
-                return fallback
-            size_matched = (
+                return False, 0.0
+            size_matched = float(
                 order.get("size_matched") or
                 order.get("sizeMatched") or
                 order.get("matched_amount") or
-                order.get("matchedAmount")
+                order.get("matchedAmount") or 0
             )
-            if size_matched and float(size_matched) > 0:
-                return round(amount_usdc / float(size_matched), 6)
+            return size_matched > 0, size_matched
         except Exception as e:
-            log.debug(f"Could not fetch fill price for order {order_id}: {e}")
+            log.debug(f"Could not check fill status for order {order_id}: {e}")
+            return False, 0.0
+
+    def get_actual_fill_price(self, order_id: str, amount_usdc: float, fallback: float) -> float:
+        """Query CLOB API for actual fill price after a FOK order executes."""
+        was_filled, size_matched = self.get_order_fill(order_id)
+        if was_filled:
+            return round(amount_usdc / size_matched, 6)
         return fallback
 
     def repair_open_trade_prices(self, con) -> None:

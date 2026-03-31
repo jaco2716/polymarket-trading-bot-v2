@@ -174,10 +174,19 @@ class ExecutionService:
         try:
             result = self._poly.place_market_order(token_id, amount, trade.direction, trade.price)
             order_id = result["order_id"]
-            fill_price = self._poly.get_actual_fill_price(
-                order_id, amount, trade.price
-            ) if order_id else trade.price
+            if not order_id:
+                log.warning(f"No order_id in response for {trade.market['name'][:50]} — skipping")
+                return None
 
+            was_filled, size_matched = self._poly.get_order_fill(order_id)
+            if not was_filled:
+                log.warning(
+                    f"FOK order was NOT filled (cancelled by exchange): {order_id}\n"
+                    f"   Market: {trade.market['name'][:60]}"
+                )
+                return None
+
+            fill_price = round(amount / size_matched, 6)
             size_pct = round(amount / base_amount * 100) if base_amount > 0 else 100
             log.info(
                 f"💰 LIVE trade placed!\n"

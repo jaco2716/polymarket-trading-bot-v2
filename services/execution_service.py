@@ -178,7 +178,10 @@ class ExecutionService:
                 log.warning(f"No order_id in response for {trade.market['name'][:50]} — skipping")
                 return None
 
-            was_filled, size_matched = self._poly.get_order_fill(order_id)
+            delayed = result.get("status") == "delayed"
+            if delayed:
+                log.debug(f"Order {order_id} is delayed — will retry fill check")
+            was_filled, size_matched = self._poly.get_order_fill(order_id, delayed=delayed)
             if not was_filled:
                 log.warning(
                     f"FOK order was NOT filled (cancelled by exchange): {order_id}\n"
@@ -197,8 +200,12 @@ class ExecutionService:
                 f"   Budget:   ${budget:.2f} → ${new_budget:.2f}"
             )
         except Exception as e:
-            log.error(f"LIVE order FAILED for {trade.market['name'][:50]}: {e}")
-            discarded.add(trade.market.get("id") or trade.market.get("condition_id", ""), "order_failed")
+            err = str(e)
+            if "fully filled" in err or "FOK" in err:
+                log.warning(f"FOK killed (thin liquidity) for {trade.market['name'][:50]} — skipping this scan")
+            else:
+                log.error(f"LIVE order FAILED for {trade.market['name'][:50]}: {e}")
+                discarded.add(trade.market.get("id") or trade.market.get("condition_id", ""), "order_failed")
             return None
 
         con.execute("""

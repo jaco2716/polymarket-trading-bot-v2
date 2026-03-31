@@ -3,6 +3,7 @@ Wrapper around py-clob-client for all Polymarket CLOB interactions.
 Singleton pattern preserved. All CLOB-specific logic lives here.
 """
 import logging
+import time
 from typing import Optional
 
 import requests
@@ -171,26 +172,41 @@ class PolymarketClient:
         log.debug(f"post_order response: {resp}")
 
         order_id = None
+        status = None
         if isinstance(resp, dict):
             order_id = resp.get("orderID") or resp.get("order_id") or resp.get("id")
+            status = resp.get("status")
         elif hasattr(resp, "orderID"):
             order_id = resp.orderID
 
-        return {"order_id": order_id, "response": resp}
+        return {"order_id": order_id, "status": status, "response": resp}
 
-    def get_order_fill(self, order_id: str) -> tuple[bool, float]:
-        """Check if a FOK order was filled. Returns (was_filled, size_matched_shares)."""
-        try:
-            order = self.get_client().get_order(order_id)
-            if not isinstance(order, dict):
-                return False, 0.0
-            size_matched = float(
-                order.get("size_matched") or
-                order.get("sizeMatched") or
-                order.get("matched_amount") or
-                order.get("matchedAmount") or 0
-            )
-            if size_matched == 0:
+    def get_order_fill(self, order_id: str, delayed: bool = False) -> tuple[bool, float]:
+        """Check if a FOK order was filled. Returns (was_filled, size_matched_shares).
+
+        If delayed=True the exchange is still processing — retry up to 5x with
+        increasing waits before concluding the order was not filled.
+        """
+        attempts = 5 if delayed else 1
+        wait = 1.0  # seconds between retries
+        for attempt in range(attempts):
+            if attempt > 0:
+                log.debug(f"Retrying order fill check ({attempt}/{attempts - 1}) after {wait}s — order_id={order_id}")
+                time.sleep(wait)
+                wait = min(wait * 2, 4.0)
+            try:
+                order = self.get_client().get_order(order_id)
+                if not isinstance(order, dict):
+                    log.debug(f"Order {order_id} not yet in CLOB (null response), attempt {attempt + 1}")
+                    continue
+                size_matched = float(
+                    order.get("size_matched") or
+                    order.get("sizeMatched") or
+                    order.get("matched_amount") or
+                    order.get("matchedAmount") or 0
+                )
+                if size_matched > 0:
+                    return True, size_matched
                 status     = order.get("status") or order.get("order_status") or "unknown"
                 size_total = order.get("original_size") or order.get("size") or "?"
                 maker_amt  = order.get("maker_amount") or order.get("makerAmount") or "?"
@@ -198,10 +214,12 @@ class PolymarketClient:
                     f"FOK not filled — status={status}  original_size={size_total}"
                     f"  maker_amount={maker_amt}  raw={order}"
                 )
-            return size_matched > 0, size_matched
-        except Exception as e:
-            log.debug(f"Could not check fill status for order {order_id}: {e}")
-            return False, 0.0
+                # If the order exists but has a terminal non-filled status, stop retrying
+                if status in ("cancelled", "CANCELLED", "unmatched", "UNMATCHED"):
+                    break
+            except Exception as e:
+                log.debug(f"Could not check fill status for order {order_id}: {e}")
+        return False, 0.0
 
     def get_actual_fill_price(self, order_id: str, amount_usdc: float, fallback: float) -> float:
         """Query CLOB API for actual fill price after a FOK order executes."""

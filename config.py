@@ -75,6 +75,9 @@ CFG = {
     "MAX_LIVE_TRADE_USDC":       float(os.getenv("MAX_LIVE_TRADE_USDC", "50")),
     "LIVE_MAX_OPEN_TRADES":      int(os.getenv("LIVE_MAX_OPEN_TRADES", "5")),
     "LIVE_DRY_RUN":              os.getenv("LIVE_DRY_RUN", "true").lower() == "true",
+
+    # Order execution
+    "SLIPPAGE_PCT":              float(os.getenv("SLIPPAGE_PCT", "0.01")),  # 1% default
 }
 
 

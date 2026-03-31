@@ -146,14 +146,34 @@ class PolymarketClient:
         except (TypeError, ValueError, KeyError):
             return None
 
-    def place_market_order(self, token_id: str, amount: float, direction: str, price: float = 0.0) -> dict:
-        """Create and post a FOK market order. Returns dict with order_id.
+    def warm_token_cache(self, token_id: str) -> None:
+        """Pre-fetch tick_size and fee_rate into py_clob_client's internal cache.
 
-        price should always be passed — it is used as the limit price for the signed
-        order, which controls how many shares are requested for `amount` USDC.
-        Without it the library calls calculate_market_price() internally, which can
-        walk the order book in the wrong direction and request far more shares than
-        intended, causing the fill to cost much more than `amount`.
+        The library caches these (tick_size: 300s TTL, fee_rate: permanent) but
+        the first call per token triggers HTTP requests. Calling this early moves
+        that latency out of the critical order-placement path.
+        """
+        client = self.get_client()
+        try:
+            client.get_tick_size(token_id)
+            client.get_fee_rate_bps(token_id)
+        except Exception as e:
+            log.debug(f"Cache warm failed for {token_id[:16]}…: {e}")
+
+    def place_market_order(self, token_id: str, amount: float, direction: str, price: float = 0.0) -> dict:
+        """Create and post a FAK (Fill-and-Kill / IOC) market order.
+
+        Returns dict with order_id, status, and response.
+
+        price should always be passed — it is the limit price for the signed
+        order (typically analysis_price * (1 + slippage) for buys).  It controls
+        how many shares are requested for `amount` USDC.  Without it the library
+        calls calculate_market_price() internally which can walk the book in the
+        wrong direction.
+
+        FAK semantics: fills whatever portion the book can match immediately,
+        cancels the rest.  This avoids the 400 "fully filled" errors that FOK
+        produces on thin order books.
         """
         from py_clob_client.clob_types import MarketOrderArgs, OrderType
         from py_clob_client.order_builder.constants import BUY, SELL
@@ -168,7 +188,7 @@ class PolymarketClient:
             price=price if price > 0 else None,
         )
         signed_order = client.create_market_order(mo)
-        resp = client.post_order(signed_order, OrderType.FOK)
+        resp = client.post_order(signed_order, OrderType.FAK)
         log.debug(f"post_order response: {resp}")
 
         order_id = None
@@ -182,7 +202,7 @@ class PolymarketClient:
         return {"order_id": order_id, "status": status, "response": resp}
 
     def get_order_fill(self, order_id: str, delayed: bool = False) -> tuple[bool, float]:
-        """Check if a FOK order was filled. Returns (was_filled, size_matched_shares).
+        """Check if an order was filled. Returns (was_filled, size_matched_shares).
 
         If delayed=True the exchange is still processing — retry up to 5x with
         increasing waits before concluding the order was not filled.
@@ -211,7 +231,7 @@ class PolymarketClient:
                 size_total = order.get("original_size") or order.get("size") or "?"
                 maker_amt  = order.get("maker_amount") or order.get("makerAmount") or "?"
                 log.debug(
-                    f"FOK not filled — status={status}  original_size={size_total}"
+                    f"Order not filled — status={status}  original_size={size_total}"
                     f"  maker_amount={maker_amt}  raw={order}"
                 )
                 # If the order exists but has a terminal non-filled status, stop retrying

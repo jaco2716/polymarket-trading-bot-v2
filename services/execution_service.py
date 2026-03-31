@@ -147,7 +147,7 @@ class ExecutionService:
         return new_budget
 
     def _execute_live(self, con: sqlite3.Connection, trade: TradeRequest) -> Optional[float]:
-        """Real CLOB order. Resolve token, check neg-risk, place FOK order."""
+        """Real CLOB order. Resolve token, check neg-risk, place FAK (IOC) order."""
         if not self._can_open_trade(con):
             log.info(f"Max live open trades ({CFG['LIVE_MAX_OPEN_TRADES']}) reached — skipping")
             return None
@@ -168,11 +168,14 @@ class ExecutionService:
             log.info(f"Skipping neg-risk market: {trade.market['name'][:50]}")
             return None
 
-        fee = calc_fee(amount, trade.price, trade.order_type)
-        new_budget = budget - amount - fee
+        # Pre-warm tick_size + fee_rate cache before the critical order path
+        self._poly.warm_token_cache(token_id)
+
+        # Apply slippage to limit price for buy orders
+        limit_price = trade.price * (1 + CFG["SLIPPAGE_PCT"]) if trade.direction == "yes" else trade.price
 
         try:
-            result = self._poly.place_market_order(token_id, amount, trade.direction, trade.price)
+            result = self._poly.place_market_order(token_id, amount, trade.direction, limit_price)
             order_id = result["order_id"]
             if not order_id:
                 log.warning(f"No order_id in response for {trade.market['name'][:50]} — skipping")
@@ -184,25 +187,34 @@ class ExecutionService:
             was_filled, size_matched = self._poly.get_order_fill(order_id, delayed=delayed)
             if not was_filled:
                 log.warning(
-                    f"FOK order was NOT filled (cancelled by exchange): {order_id}\n"
+                    f"Order not filled (cancelled by exchange): {order_id}\n"
                     f"   Market: {trade.market['name'][:60]}"
                 )
                 return None
 
-            fill_price = round(amount / size_matched, 6)
-            size_pct = round(amount / base_amount * 100) if base_amount > 0 else 100
+            # Handle partial fills: compute actual USDC spent from fill ratio
+            expected_shares = amount / limit_price
+            fill_ratio = min(1.0, size_matched / expected_shares) if expected_shares > 0 else 0
+            actual_amount = round(fill_ratio * amount, 2)
+            fill_price = round(actual_amount / size_matched, 6) if size_matched > 0 else limit_price
+
+            fee = calc_fee(actual_amount, fill_price, trade.order_type)
+            new_budget = budget - actual_amount - fee
+
+            size_pct = round(actual_amount / base_amount * 100) if base_amount > 0 else 100
+            partial_note = f"  (partial: {fill_ratio:.0%})" if fill_ratio < 0.99 else ""
             log.info(
-                f"💰 LIVE trade placed!\n"
+                f"💰 LIVE trade placed!{partial_note}\n"
                 f"   Market:   {trade.market['name'][:60]}\n"
-                f"   {trade.direction.upper()} @ analysis {trade.price:.3f} → fill {fill_price:.3f}  |  ${amount:.2f} staked ({size_pct}% of base)\n"
+                f"   {trade.direction.upper()} @ analysis {trade.price:.3f} → fill {fill_price:.3f}  |  ${actual_amount:.2f} staked ({size_pct}% of base)\n"
                 f"   Order ID: {order_id}\n"
                 f"   Tags:     {', '.join(trade.tags)}\n"
                 f"   Budget:   ${budget:.2f} → ${new_budget:.2f}"
             )
         except Exception as e:
             err = str(e)
-            if "fully filled" in err or "FOK" in err:
-                log.warning(f"FOK killed (thin liquidity) for {trade.market['name'][:50]} — skipping this scan")
+            if "fully filled" in err or "FOK" in err or "FAK" in err:
+                log.warning(f"Order killed (thin liquidity) for {trade.market['name'][:50]} — skipping this scan")
             else:
                 log.error(f"LIVE order FAILED for {trade.market['name'][:50]}: {e}")
                 discarded.add(trade.market.get("id") or trade.market.get("condition_id", ""), "order_failed")
@@ -217,7 +229,7 @@ class ExecutionService:
         """, (
             datetime.now(timezone.utc).isoformat(),
             trade.market["id"], trade.market["name"], token_id,
-            trade.direction, fill_price, amount, fee, trade.order_type,
+            trade.direction, fill_price, actual_amount, fee, trade.order_type,
             json.dumps(trade.tags), trade.notes, "live", order_id,
             trade.market.get("end_date"), trade.market.get("liquidity"),
             trade.market.get("volume_24h"), trade.market.get("slug"),

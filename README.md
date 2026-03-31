@@ -25,9 +25,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your ANTHROPIC_API_KEY
-python main.py
+caffeinate -i python main.py
 deactivate              # Exit venv when done
 ```
+
+`caffeinate` is built into macOS and prevents your Mac from sleeping while the bot runs. When you stop the bot with `Ctrl+C`, sleep behaviour returns to normal.
 
 ## Modes
 

@@ -13,11 +13,11 @@ DATA_URL: str = "https://data-api.polymarket.com"
 CLOB_URL: str = "https://clob.polymarket.com"
 
 # File paths (relative to working directory)
-DB_FILE: str = "paper_trades.db"
-BUDGET_FILE: str = "budget.json"
-SHADOW_BUDGET_FILE: str = "shadow_budget.json"
-LIVE_BUDGET_FILE: str = "live_budget.json"
-DISCARDED_FILE: str = "discarded_markets.json"
+DB_FILE: str = "data/paper_trades.db"
+BUDGET_FILE: str = "data/budget.json"
+SHADOW_BUDGET_FILE: str = "data/shadow_budget.json"
+LIVE_BUDGET_FILE: str = "data/live_budget.json"
+DISCARDED_FILE: str = "data/discarded_markets.json"
 
 CFG = {
     # Required

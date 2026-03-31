@@ -8,15 +8,14 @@ Open: http://localhost:5000
 import json
 import os
 import sqlite3
+import sys
 from typing import Optional
 from dotenv import load_dotenv
 load_dotenv()
 from flask import Flask, jsonify, render_template
 
-DB_FILE                 = "paper_trades.db"
-BUDGET_FILE             = "budget.json"
-SHADOW_BUDGET_FILE      = "shadow_budget.json"
-LIVE_BUDGET_FILE        = "live_budget.json"
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from config import DB_FILE, BUDGET_FILE, SHADOW_BUDGET_FILE, LIVE_BUDGET_FILE
 STARTING_BUDGET         = float(os.getenv("STARTING_BUDGET", "500"))
 SHADOW_STARTING_BUDGET  = float(os.getenv("SHADOW_STARTING_BUDGET", os.getenv("STARTING_BUDGET", "500")))
 SCAN_INTERVAL           = int(os.getenv("SCAN_INTERVAL", "3600"))

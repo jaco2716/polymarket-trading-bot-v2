@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Polymarket Dashboard</title>
+  <title>Polymarket V2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
@@ -151,7 +151,7 @@
         <table class="w-full text-xs">
           <thead style="background:#1c2128;color:#8b949e" class="uppercase tracking-wider text-xs">
             <tr>
-              <th class="px-3 py-2 text-left">Time (UTC)</th>
+              <th class="px-3 py-2 text-left">Time</th>
               <th class="px-3 py-2 text-right">Markets</th>
               <th class="px-3 py-2 text-right">Signals</th>
               <th class="px-3 py-2 text-right">Trades</th>
@@ -189,7 +189,14 @@ let countdownTimer;
 // ── Formatters ────────────────────────────────────────────
 const sign    = n => n >= 0 ? '+' : '';
 const fmtPnl  = n => n == null ? '—' : `${sign(n)}$${Math.abs(n).toFixed(2)}`;
-const fmtDate = ts => ts ? ts.slice(0, 16).replace('T', ' ') : '—';
+const fmtDate = ts => {
+  if (!ts) return '—';
+  const s = /Z$|[+\-]\d{2}:\d{2}$/.test(ts) ? ts : ts + 'Z';
+  const d = new Date(s);
+  if (isNaN(d)) return ts.slice(0, 16).replace('T', ' ');
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 const pnlCls  = n => n == null ? 'muted' : n > 0 ? 'pos' : n < 0 ? 'neg' : 'muted';
 const pnlSpan = n => `<span class="${pnlCls(n)}">${fmtPnl(n)}</span>`;
 

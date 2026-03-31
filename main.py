@@ -59,8 +59,8 @@ class ScanOrchestrator:
           1. Resolve settled trades (both real and shadow)
           2. Check open trade limits
           3. Fetch markets
-          4. Run whale strategy (independent, first)
-          5. Run haiku strategy
+          4. Run haiku strategy (priority, first)
+          5. Run whale strategy (fetched only after haiku completes)
           6. Log scan results
 
         ATOMIC ACTION PATTERN: When haiku returns a signal above threshold,
@@ -98,8 +98,13 @@ class ScanOrchestrator:
         signals_found = 0
         trades_placed = 0
 
-        # Step 4: Whale strategy (independent, runs first)
-        whale_signals: list[dict] = []
+        # Step 4: Haiku strategy (priority, runs first)
+        if CFG["ENABLE_HAIKU"]:
+            h_signals, h_trades = self._run_haiku_scan(con, markets, traded, shadow=shadow)
+            signals_found += h_signals
+            trades_placed += h_trades
+
+        # Step 5: Whale strategy (fetched only after haiku completes)
         if CFG["ENABLE_WHALE_COPY"]:
             log.info("Checking whale wallets...")
             whale_markets = self._markets.fetch_markets(randomize=False)
@@ -107,15 +112,8 @@ class ScanOrchestrator:
                 whale_markets if whale_markets else markets
             )
 
-        if shadow:
-            # Shadow mode: log hypothetical trades for both strategies
-            if CFG["ENABLE_HAIKU"]:
-                h_signals, h_trades = self._run_haiku_scan(con, markets, traded, shadow=True)
-                signals_found += h_signals
-                trades_placed += h_trades
-
-            if CFG["ENABLE_WHALE_COPY"]:
-                whale_cap = CFG["MAX_WHALE_TRADES_PER_SCAN"]
+            whale_cap = CFG["MAX_WHALE_TRADES_PER_SCAN"]
+            if shadow:
                 fresh = [s for s in whale_signals if s["market"]["id"] not in traded and not discarded.is_discarded(s["market"]["id"])]
                 for sig in fresh[:whale_cap]:
                     trade_req = self._whale.from_signal(sig)
@@ -123,10 +121,7 @@ class ScanOrchestrator:
                     signals_found += 1
                     trades_placed += 1
                     traded.add(sig["market"]["id"])
-        else:
-            # All real-trade modes (compete / parallel / live)
-            if CFG["ENABLE_WHALE_COPY"]:
-                whale_cap = CFG["MAX_WHALE_TRADES_PER_SCAN"]
+            else:
                 fresh = [
                     s for s in whale_signals
                     if s["market"]["id"] not in traded
@@ -140,11 +135,6 @@ class ScanOrchestrator:
                     if result is not None:
                         trades_placed += 1
                         traded.add(sig["market"]["id"])
-
-            if CFG["ENABLE_HAIKU"]:
-                h_signals, h_trades = self._run_haiku_scan(con, markets, traded, shadow=False)
-                signals_found += h_signals
-                trades_placed += h_trades
 
         # Step 6: Log scan
         con.execute(

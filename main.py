@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from config import CFG, validate_config
 from utils.logging import setup_logging
 from utils.db import init_db
+import utils.discarded as discarded
 from clients.clob_client import PolymarketClient
 from clients.anthropic_client import HaikuClient
 from services.budget_service import BudgetService
@@ -115,7 +116,7 @@ class ScanOrchestrator:
 
             if CFG["ENABLE_WHALE_COPY"]:
                 whale_cap = CFG["MAX_WHALE_TRADES_PER_SCAN"]
-                fresh = [s for s in whale_signals if s["market"]["id"] not in traded]
+                fresh = [s for s in whale_signals if s["market"]["id"] not in traded and not discarded.is_discarded(s["market"]["id"])]
                 for sig in fresh[:whale_cap]:
                     trade_req = self._whale.from_signal(sig)
                     self._execution.execute(con, trade_req)
@@ -129,6 +130,7 @@ class ScanOrchestrator:
                 fresh = [
                     s for s in whale_signals
                     if s["market"]["id"] not in traded
+                    and not discarded.is_discarded(s["market"]["id"])
                     and not self._execution._poly.is_neg_risk(s["market"], s["direction"])
                 ]
                 for sig in fresh[:whale_cap]:
@@ -158,7 +160,7 @@ class ScanOrchestrator:
         scan_limit = CFG["MARKETS_PER_SCAN"]
         log.info(f"[haiku-analyse] Scanning top {min(scan_limit, len(markets))} markets...")
         for m in markets[:scan_limit]:
-            if m["id"] in traded:
+            if m["id"] in traded or discarded.is_discarded(m["id"]):
                 continue
             if not shadow and not self._execution._can_open_trade(con):
                 break

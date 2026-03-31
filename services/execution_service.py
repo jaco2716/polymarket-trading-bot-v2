@@ -13,6 +13,7 @@ from config import CFG
 from clients.clob_client import PolymarketClient
 from services.budget_service import BudgetService
 from utils.fees import calc_fee, price_scaled_params
+import utils.discarded as discarded
 
 log = logging.getLogger(__name__)
 
@@ -188,6 +189,7 @@ class ExecutionService:
             )
         except Exception as e:
             log.error(f"LIVE order FAILED for {trade.market['name'][:50]}: {e}")
+            discarded.add(trade.market.get("id") or trade.market.get("condition_id", ""), "order_failed")
             return None
 
         con.execute("""

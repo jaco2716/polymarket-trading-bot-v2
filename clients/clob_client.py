@@ -9,6 +9,7 @@ import requests
 
 from config import CFG, CLOB_URL
 from clients.http import get
+import utils.discarded as discarded
 
 log = logging.getLogger(__name__)
 
@@ -97,8 +98,13 @@ class PolymarketClient:
             return _neg_risk_cache[token_id]
         try:
             result = self.get_client().get_neg_risk(token_id)
-            _neg_risk_cache[token_id] = bool(result)
-            return bool(result)
+            is_neg = bool(result)
+            _neg_risk_cache[token_id] = is_neg
+            if is_neg:
+                market_id = market.get("id") or market.get("condition_id")
+                if market_id:
+                    discarded.add(market_id, "neg_risk")
+            return is_neg
         except Exception:
             _neg_risk_cache[token_id] = False
             return False

@@ -20,10 +20,13 @@ main.py                    Entry point + scan orchestrator
 ## Setup
 
 ```bash
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your ANTHROPIC_API_KEY
 python main.py
+deactivate              # Exit venv when done
 ```
 
 ## Modes

@@ -1,6 +1,9 @@
 # Ignore environment variables file with sensitive information
 .env
 
+# Ignore virtual environment directory
+venv/
+
 # Bot runtime files
 bot.log
 bot.log.*

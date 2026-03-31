@@ -168,6 +168,7 @@ class PolymarketClient:
         )
         signed_order = client.create_market_order(mo)
         resp = client.post_order(signed_order, OrderType.FOK)
+        log.debug(f"post_order response: {resp}")
 
         order_id = None
         if isinstance(resp, dict):
@@ -189,6 +190,14 @@ class PolymarketClient:
                 order.get("matched_amount") or
                 order.get("matchedAmount") or 0
             )
+            if size_matched == 0:
+                status     = order.get("status") or order.get("order_status") or "unknown"
+                size_total = order.get("original_size") or order.get("size") or "?"
+                maker_amt  = order.get("maker_amount") or order.get("makerAmount") or "?"
+                log.debug(
+                    f"FOK not filled — status={status}  original_size={size_total}"
+                    f"  maker_amount={maker_amt}  raw={order}"
+                )
             return size_matched > 0, size_matched
         except Exception as e:
             log.debug(f"Could not check fill status for order {order_id}: {e}")

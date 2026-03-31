@@ -216,6 +216,8 @@ function renderStatCards(ov) {
   if (hasLiveData) {
     const livePnl = ov.live_total_pnl || 0;
     const liveOpenAmt = ov.live_open_amount || 0;
+    const liveBudget = ov.live_budget || 0;
+    const liveTotal = liveBudget + liveOpenAmt;
     cards.push({
       label: 'Live Budget',
       value: ov.live_budget != null ? `$${ov.live_budget.toFixed(2)}` : '—',
@@ -226,6 +228,8 @@ function renderStatCards(ov) {
       sub2Cls: pnlCls(livePnl),
       sub3: `In open trades: $${liveOpenAmt.toFixed(2)}`,
       sub3Cls: 'muted',
+      sub4: `Total value: $${liveTotal.toFixed(2)}`,
+      sub4Cls: 'text-yellow-400',
     });
   }
 
@@ -267,6 +271,7 @@ function renderStatCards(ov) {
       <div class="text-xs ${c.subCls} mt-1.5">${c.sub}</div>
       ${c.sub2 ? `<div class="text-xs ${c.sub2Cls || 'muted'} mt-1">${c.sub2}</div>` : ''}
       ${c.sub3 ? `<div class="text-xs ${c.sub3Cls || 'muted'} mt-1">${c.sub3}</div>` : ''}
+      ${c.sub4 ? `<div class="text-xs ${c.sub4Cls || 'muted'} mt-1">${c.sub4}</div>` : ''}
     </div>
   `).join('');
 }

@@ -3,13 +3,15 @@ Logging configuration: rotating file handler + stdout.
 """
 import logging
 import logging.handlers
+import os
 import sys
 
 
 def setup_logging() -> logging.Logger:
     """Configure root logger with rotating file and stdout handlers."""
+    level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format="%(asctime)s  %(levelname)-7s  %(message)s",
         handlers=[
             logging.handlers.RotatingFileHandler(

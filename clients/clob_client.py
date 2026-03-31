@@ -145,8 +145,15 @@ class PolymarketClient:
         except (TypeError, ValueError, KeyError):
             return None
 
-    def place_market_order(self, token_id: str, amount: float, direction: str) -> dict:
-        """Create and post a FOK market order. Returns dict with order_id."""
+    def place_market_order(self, token_id: str, amount: float, direction: str, price: float = 0.0) -> dict:
+        """Create and post a FOK market order. Returns dict with order_id.
+
+        price should always be passed — it is used as the limit price for the signed
+        order, which controls how many shares are requested for `amount` USDC.
+        Without it the library calls calculate_market_price() internally, which can
+        walk the order book in the wrong direction and request far more shares than
+        intended, causing the fill to cost much more than `amount`.
+        """
         from py_clob_client.clob_types import MarketOrderArgs, OrderType
         from py_clob_client.order_builder.constants import BUY, SELL
 
@@ -157,6 +164,7 @@ class PolymarketClient:
             token_id=token_id,
             amount=amount,
             side=side,
+            price=price if price > 0 else None,
         )
         signed_order = client.create_market_order(mo)
         resp = client.post_order(signed_order, OrderType.FOK)

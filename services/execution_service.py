@@ -172,7 +172,7 @@ class ExecutionService:
         new_budget = budget - amount - fee
 
         try:
-            result = self._poly.place_market_order(token_id, amount, trade.direction)
+            result = self._poly.place_market_order(token_id, amount, trade.direction, trade.price)
             order_id = result["order_id"]
             fill_price = self._poly.get_actual_fill_price(
                 order_id, amount, trade.price

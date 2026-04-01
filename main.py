@@ -28,6 +28,7 @@ from services.resolution_service import ResolutionService
 from services.copy_trading_service import CopyTradingService
 from strategies.haiku_strategy import HaikuStrategy
 from strategies.whale_strategy import WhaleStrategy
+from utils.filters import extract_event_key
 
 log = logging.getLogger(__name__)
 
@@ -148,12 +149,22 @@ class ScanOrchestrator:
         """Run haiku strategy over markets. Returns (signals, trades)."""
         signals = trades = 0
         scan_limit = CFG["MARKETS_PER_SCAN"]
+
+        # Load event keys of all open positions to block correlated siblings
+        traded_event_keys: set[str] = self._budget.open_event_keys(con) if not shadow else set()
+
         log.info(f"[haiku-analyse] Scanning top {min(scan_limit, len(markets))} markets...")
         for m in markets[:scan_limit]:
             if m["id"] in traded or discarded.is_discarded(m["id"]):
                 continue
             if not shadow and not self._execution._can_open_trade(con):
                 break
+
+            # Skip markets that are correlated with an already-open position
+            event_key = extract_event_key(m["name"])
+            if event_key in traded_event_keys:
+                log.debug(f"[haiku] Skipping same-event market: {m['name'][:70]}")
+                continue
 
             trade_req = self._haiku.evaluate(con, m, shadow=shadow)
             if trade_req is None:
@@ -165,6 +176,7 @@ class ScanOrchestrator:
             if result is not None or shadow:
                 trades += 1
                 traded.add(m["id"])
+                traded_event_keys.add(event_key)  # block siblings in same scan
                 break  # one haiku trade per scan
         return signals, trades
 

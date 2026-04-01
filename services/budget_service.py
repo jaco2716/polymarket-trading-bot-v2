@@ -8,6 +8,7 @@ import sqlite3
 from typing import Optional
 
 from config import CFG, BUDGET_FILE, SHADOW_BUDGET_FILE, LIVE_BUDGET_FILE
+from utils.filters import extract_event_key
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +63,15 @@ class BudgetService:
         """Market IDs with open shadow trades."""
         rows = con.execute("SELECT market_id FROM shadow_trades WHERE resolved=0").fetchall()
         return {r[0] for r in rows}
+
+    def open_event_keys(self, con: sqlite3.Connection) -> set[str]:
+        """Normalised event keys for all open real trades.
+
+        Used to prevent entering multiple correlated positions on the same
+        underlying match (e.g. Game 1, Game 2, BO3, Handicap all share a key).
+        """
+        rows = con.execute("SELECT market_name FROM trades WHERE resolved=0").fetchall()
+        return {extract_event_key(r[0]) for r in rows}
 
     def get_budget_mode(self) -> str:
         """Map STRATEGY_MODE to budget mode string."""

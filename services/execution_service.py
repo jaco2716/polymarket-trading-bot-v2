@@ -153,6 +153,23 @@ class ExecutionService:
             log.info(f"Max live open trades ({CFG['LIVE_MAX_OPEN_TRADES']}) reached — skipping")
             return None
         budget = self._budget.load("live")
+
+        # Guard: sync local budget with authoritative CLOB on-chain balance
+        clob_balance = self._poly.get_usdc_balance()
+        if clob_balance < budget * 0.9:
+            log.warning(
+                f"CLOB balance (${clob_balance:.2f}) is more than 10% below local budget "
+                f"(${budget:.2f}) — budgets have drifted. Syncing local to CLOB balance."
+            )
+            self._budget.save("live", clob_balance)
+            budget = clob_balance
+        if clob_balance < CFG["MIN_TRADE_USDC"]:
+            log.warning(
+                f"CLOB balance (${clob_balance:.2f}) is below MIN_TRADE_USDC "
+                f"(${CFG['MIN_TRADE_USDC']:.2f}) — skipping order"
+            )
+            return None
+
         base_amount = round(budget * CFG["TRADE_SIZE_PCT"], 2)
         amount = self._compute_trade_size(budget, trade.price)
         if amount is None:

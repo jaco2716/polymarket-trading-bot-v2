@@ -66,6 +66,29 @@ class PolymarketClient:
             log.warning(f"Could not update balance allowance: {e}")
         log.info("Live trading setup validated — CLOB API reachable")
 
+    def get_usdc_balance(self) -> float:
+        """Query the CLOB API for the wallet's current USDC collateral balance and
+        refresh the on-chain allowance so the exchange contract can spend it.
+
+        The ERC-20 allowance is consumed as orders are placed and must be refreshed
+        periodically — calling update_balance_allowance() here ensures it never
+        silently depletes between scans.
+
+        Returns the balance in USDC (divides microunits by 1_000_000).
+        Returns float('inf') on any error so that API slowness never blocks trading.
+        """
+        try:
+            from py_clob_client.clob_types import BalanceAllowanceParams, AssetType
+            client = self.get_client()
+            params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
+            client.update_balance_allowance(params=params)
+            resp = client.get_balance_allowance(params=params)
+            raw = float(resp.get("balance") or 0)
+            return raw / 1_000_000
+        except Exception as e:
+            log.warning(f"Could not fetch CLOB balance: {e} — proceeding with local budget")
+            return float("inf")
+
     def resolve_token_ids(self, market: dict) -> tuple[Optional[str], Optional[str]]:
         """Return (yes_token_id, no_token_id), falling back to CLOB API if needed."""
         yes_tid = market.get("yes_token_id")

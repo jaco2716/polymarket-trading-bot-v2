@@ -78,6 +78,7 @@ CFG = {
 
     # Order execution
     "SLIPPAGE_PCT":              float(os.getenv("SLIPPAGE_PCT", "0.01")),  # 1% default
+    "TRADE_SIZE_BUFFER_PCT":     float(os.getenv("TRADE_SIZE_BUFFER_PCT", "0.15")),
 }
 
 

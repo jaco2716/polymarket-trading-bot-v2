@@ -201,13 +201,13 @@ class PolymarketClient:
 
         return {"order_id": order_id, "status": status, "response": resp}
 
-    def get_order_fill(self, order_id: str, delayed: bool = False) -> tuple[bool, float]:
+    def get_order_fill(self, order_id: str) -> tuple[bool, float]:
         """Check if an order was filled. Returns (was_filled, size_matched_shares).
 
-        If delayed=True the exchange is still processing — retry up to 5x with
-        increasing waits before concluding the order was not filled.
+        Always retries up to 5x with increasing waits before concluding
+        the order was not filled.
         """
-        attempts = 5 if delayed else 1
+        attempts = 5
         wait = 1.0  # seconds between retries
         for attempt in range(attempts):
             if attempt > 0:

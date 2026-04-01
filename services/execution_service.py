@@ -89,7 +89,8 @@ class ExecutionService:
         _, amount = price_scaled_params(price, base_conf, base_amount)
         amount = max(amount, CFG["MIN_TRADE_USDC"])
         if not is_shadow and CFG["STRATEGY_MODE"] == "live":
-            amount = min(amount, CFG["MAX_LIVE_TRADE_USDC"])
+            hard_cap = round(base_amount * (1 + CFG["TRADE_SIZE_BUFFER_PCT"]), 2)
+            amount = min(amount, hard_cap, CFG["MAX_LIVE_TRADE_USDC"])
         if amount > budget * 0.95:
             return None
         return amount
@@ -180,37 +181,6 @@ class ExecutionService:
             if not order_id:
                 log.warning(f"No order_id in response for {trade.market['name'][:50]} — skipping")
                 return None
-
-            delayed = result.get("status") == "delayed"
-            if delayed:
-                log.debug(f"Order {order_id} is delayed — will retry fill check")
-            was_filled, size_matched = self._poly.get_order_fill(order_id, delayed=delayed)
-            if not was_filled:
-                log.warning(
-                    f"Order not filled (cancelled by exchange): {order_id}\n"
-                    f"   Market: {trade.market['name'][:60]}"
-                )
-                return None
-
-            # Handle partial fills: compute actual USDC spent from fill ratio
-            expected_shares = amount / limit_price
-            fill_ratio = min(1.0, size_matched / expected_shares) if expected_shares > 0 else 0
-            actual_amount = round(fill_ratio * amount, 2)
-            fill_price = round(actual_amount / size_matched, 6) if size_matched > 0 else limit_price
-
-            fee = calc_fee(actual_amount, fill_price, trade.order_type)
-            new_budget = budget - actual_amount - fee
-
-            size_pct = round(actual_amount / base_amount * 100) if base_amount > 0 else 100
-            partial_note = f"  (partial: {fill_ratio:.0%})" if fill_ratio < 0.99 else ""
-            log.info(
-                f"💰 LIVE trade placed!{partial_note}\n"
-                f"   Market:   {trade.market['name'][:60]}\n"
-                f"   {trade.direction.upper()} @ analysis {trade.price:.3f} → fill {fill_price:.3f}  |  ${actual_amount:.2f} staked ({size_pct}% of base)\n"
-                f"   Order ID: {order_id}\n"
-                f"   Tags:     {', '.join(trade.tags)}\n"
-                f"   Budget:   ${budget:.2f} → ${new_budget:.2f}"
-            )
         except Exception as e:
             err = str(e)
             if "fully filled" in err or "FOK" in err or "FAK" in err:
@@ -220,6 +190,10 @@ class ExecutionService:
                 discarded.add(trade.market.get("id") or trade.market.get("condition_id", ""), "order_failed")
             return None
 
+        # Immediately record a pending trade to prevent re-entry on next scan.
+        # If the fill check below fails, this row keeps the market in open_market_ids
+        # so we never double-enter the same position.
+        ts = datetime.now(timezone.utc).isoformat()
         con.execute("""
             INSERT INTO trades
                 (ts, market_id, market_name, token_id, direction, price, amount,
@@ -227,16 +201,52 @@ class ExecutionService:
                  end_date, liquidity, volume_24h, market_slug, market_tags, whale_size)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            datetime.now(timezone.utc).isoformat(),
-            trade.market["id"], trade.market["name"], token_id,
-            trade.direction, fill_price, actual_amount, fee, trade.order_type,
-            json.dumps(trade.tags), trade.notes, "live", order_id,
+            ts, trade.market["id"], trade.market["name"], token_id,
+            trade.direction, limit_price, 0, 0, trade.order_type,
+            json.dumps(trade.tags), "pending-fill-check", "live", order_id,
             trade.market.get("end_date"), trade.market.get("liquidity"),
             trade.market.get("volume_24h"), trade.market.get("slug"),
             json.dumps(trade.market.get("tags") or []), trade.whale_size,
         ))
         con.commit()
+
+        was_filled, size_matched = self._poly.get_order_fill(order_id)
+
+        if not was_filled:
+            log.warning(
+                f"Order not filled (cancelled by exchange): {order_id}\n"
+                f"   Market: {trade.market['name'][:60]}\n"
+                f"   Pending trade row kept to prevent re-entry — review manually"
+            )
+            return None
+
+        # Handle partial fills: compute actual USDC spent from fill ratio
+        expected_shares = amount / limit_price
+        fill_ratio = min(1.0, size_matched / expected_shares) if expected_shares > 0 else 0
+        actual_amount = round(fill_ratio * amount, 2)
+        fill_price = round(actual_amount / size_matched, 6) if size_matched > 0 else limit_price
+
+        fee = calc_fee(actual_amount, fill_price, trade.order_type)
+        new_budget = budget - actual_amount - fee
+
+        # Update the pending trade row with actual fill data
+        con.execute("""
+            UPDATE trades SET price=?, amount=?, fee=?, notes=?
+            WHERE order_id=? AND notes='pending-fill-check'
+        """, (fill_price, actual_amount, fee, trade.notes, order_id))
+        con.commit()
         self._budget.save("live", new_budget)
+
+        size_pct = round(actual_amount / base_amount * 100) if base_amount > 0 else 100
+        partial_note = f"  (partial: {fill_ratio:.0%})" if fill_ratio < 0.99 else ""
+        log.info(
+            f"💰 LIVE trade placed!{partial_note}\n"
+            f"   Market:   {trade.market['name'][:60]}\n"
+            f"   {trade.direction.upper()} @ analysis {trade.price:.3f} → fill {fill_price:.3f}  |  ${actual_amount:.2f} staked ({size_pct}% of base)\n"
+            f"   Order ID: {order_id}\n"
+            f"   Tags:     {', '.join(trade.tags)}\n"
+            f"   Budget:   ${budget:.2f} → ${new_budget:.2f}"
+        )
         return new_budget
 
     def _execute_live_dry(self, con: sqlite3.Connection, trade: TradeRequest) -> Optional[float]:

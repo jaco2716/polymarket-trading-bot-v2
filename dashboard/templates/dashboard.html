@@ -130,7 +130,7 @@
               <th class="px-3 py-2 text-right">Staked</th>
               <th class="px-3 py-2 text-left">Strategy</th>
               <th class="px-3 py-2 text-right">Whale $</th>
-              <th class="px-3 py-2 text-center hidden" id="conf-col-header">Conf</th>
+              <th class="px-3 py-2 text-center" id="conf-col-header">Conf</th>
               <th class="px-3 py-2 text-center">Status</th>
               <th class="px-3 py-2 text-right">P&amp;L</th>
               <th class="px-3 py-2 text-left">Date</th>
@@ -443,9 +443,8 @@ function setFilter(f) {
     const el = document.getElementById(`f-${id}`);
     if (el) el.className = `text-xs px-3 py-1 rounded ${f === id ? 'filter-on' : 'filter-off'}`;
   });
-  // Show/hide confidence filters and column header
+  // Show/hide confidence bucket filters (only meaningful for shadow trades)
   document.getElementById('conf-filters').classList.toggle('hidden', f !== 'shadow');
-  document.getElementById('conf-col-header').classList.toggle('hidden', f !== 'shadow');
   renderTradesTable();
 }
 
@@ -568,24 +567,27 @@ function renderTradesTable() {
       : '';
     let statusHtml;
     if (!t.resolved) {
-      statusHtml = `<span class="badge badge-open">OPEN</span>`;
+      statusHtml = '<span class="badge badge-open">OPEN</span>';
     } else if (t.outcome === t.direction) {
-      statusHtml = `<span class="badge badge-won">WON</span>`;
+      statusHtml = '<span class="badge badge-won">WON</span>';
     } else {
-      statusHtml = `<span class="badge badge-lost">LOST</span>`;
+      statusHtml = '<span class="badge badge-lost">LOST</span>';
     }
+    const confCls = t.confidence >= 0.65 ? 'pos' : t.confidence >= 0.50 ? 'text-yellow-400' : 'muted';
+    const confHtml = t.confidence != null
+      ? '<span class="' + confCls + '">' + (t.confidence * 100).toFixed(0) + '%</span>'
+      : '<span class="muted">—</span>';
+    const feeHtml = t.fee != null ? '<div class="text-xs" style="color:#6e7681">fee $' + t.fee.toFixed(2) + '</div>' : '';
     return `
       <tr class="row" style="border-top:1px solid #21262d">
         <td class="px-3 py-2 muted">${t.id}</td>
         <td class="px-3 py-2" style="max-width:260px;overflow:hidden;" title="${t.market_name}">${modeBadge}${t.market_name}</td>
         <td class="px-3 py-2 text-center">${dirBadge}</td>
         <td class="px-3 py-2 text-right muted">${t.price != null ? (t.price * 100).toFixed(1) + '%' : '—'}</td>
-        <td class="px-3 py-2 text-right">
-          ${t.amount != null ? '$' + t.amount.toFixed(2) : '—'}
-          ${t.fee != null ? `<div class="text-xs" style="color:#6e7681">fee $${t.fee.toFixed(2)}</div>` : ''}
-        </td>
+        <td class="px-3 py-2 text-right">${t.amount != null ? '$' + t.amount.toFixed(2) : '—'}${feeHtml}</td>
         <td class="px-3 py-2 muted">${tagStr}</td>
         <td class="px-3 py-2 text-right muted">${t.whale_size != null ? '$' + t.whale_size.toFixed(0) : '—'}</td>
+        <td class="px-3 py-2 text-center">${confHtml}</td>
         <td class="px-3 py-2 text-center">${statusHtml}</td>
         <td class="px-3 py-2 text-right font-medium">${pnlSpan(t.pnl)}</td>
         <td class="px-3 py-2 muted">${fmtDate(t.ts)}</td>

@@ -194,7 +194,8 @@ def strategy_stats():
 def trades():
     return jsonify(db_query("""
         SELECT id, ts, market_name, direction, price, amount, fee,
-               order_type, tags, resolved, outcome, pnl, close_ts, mode, order_id, whale_size
+               order_type, tags, resolved, outcome, pnl, close_ts, mode, order_id, whale_size,
+               confidence
         FROM trades ORDER BY id DESC LIMIT 200
     """))
 
@@ -203,7 +204,8 @@ def trades():
 def live_trades():
     return jsonify(db_query("""
         SELECT id, ts, market_name, direction, price, amount, fee,
-               order_type, tags, resolved, outcome, pnl, close_ts, mode, order_id, whale_size
+               order_type, tags, resolved, outcome, pnl, close_ts, mode, order_id, whale_size,
+               confidence
         FROM trades WHERE mode IN ('live', 'live-dry')
         ORDER BY id DESC LIMIT 200
     """))

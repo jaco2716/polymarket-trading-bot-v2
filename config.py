@@ -72,6 +72,10 @@ CFG = {
     # Low budget cooldown
     "LOW_BUDGET_COOLDOWN": int(os.getenv("LOW_BUDGET_COOLDOWN", "7200")),
 
+    # Night pause window (UTC hours, 0-23). Set either to -1 to disable.
+    "NIGHT_PAUSE_START_UTC": int(os.getenv("NIGHT_PAUSE_START_UTC", "1")),
+    "NIGHT_PAUSE_END_UTC":   int(os.getenv("NIGHT_PAUSE_END_UTC",   "4")),
+
     # Whale wallet addresses
     "WHALE_WALLETS": [
         w.strip() for w in os.getenv("WHALE_WALLETS", "").split(",") if w.strip()

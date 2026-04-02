@@ -247,6 +247,41 @@ def print_stats(con):
             log.info(f"    [{strategy}]  {total} evaluated  wr={wr}  hypothetical P&L={spnl:+.2f}")
 
 
+def _night_pause_if_needed() -> None:
+    """Sleep until NIGHT_PAUSE_END_UTC if we're inside the nightly quiet window.
+
+    Window: NIGHT_PAUSE_START_UTC → NIGHT_PAUSE_END_UTC (both in 0-23 UTC hours).
+    Defaults: 01:00 → 04:00 UTC.  Set either to -1 in .env to disable.
+    """
+    start_h = CFG.get("NIGHT_PAUSE_START_UTC", 1)
+    end_h   = CFG.get("NIGHT_PAUSE_END_UTC",   4)
+    if start_h < 0 or end_h < 0:
+        return
+
+    now  = datetime.now(timezone.utc)
+    hour = now.hour + now.minute / 60.0
+
+    in_window = (
+        (start_h < end_h and start_h <= hour < end_h) or
+        (start_h > end_h and (hour >= start_h or hour < end_h))  # overnight wrap e.g. 23→02
+    )
+    if not in_window:
+        return
+
+    # Calculate seconds until end_h today (or tomorrow if wrapped)
+    resume = now.replace(hour=end_h, minute=0, second=0, microsecond=0)
+    if resume <= now:
+        from datetime import timedelta
+        resume += timedelta(days=1)
+
+    sleep_secs = (resume - now).total_seconds()
+    log.info(
+        f"🌙 Night pause ({start_h:02d}:00–{end_h:02d}:00 UTC) — "
+        f"sleeping {sleep_secs/3600:.1f}h until {resume.strftime('%H:%M UTC')}"
+    )
+    time.sleep(sleep_secs)
+
+
 def main():
     """Entry point."""
     setup_logging()
@@ -355,6 +390,7 @@ def main():
             except Exception:
                 log.error(f"Scan error:\n{traceback.format_exc()}")
 
+            _night_pause_if_needed()
             interval = CFG["SHADOW_SCAN_INTERVAL"] if mode == "shadow" else CFG["SCAN_INTERVAL"]
             log.info(f"Sleeping {interval}s until next scan...")
             time.sleep(interval)

@@ -127,7 +127,6 @@ class ScanOrchestrator:
                     s for s in whale_signals
                     if s["market"]["id"] not in traded
                     and not discarded.is_discarded(s["market"]["id"])
-                    and not self._execution._poly.is_neg_risk(s["market"], s["direction"])
                 ]
                 for sig in fresh[:whale_cap]:
                     trade_req = self._whale.from_signal(sig)

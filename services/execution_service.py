@@ -183,8 +183,8 @@ class ExecutionService:
             return None
 
         if self._poly.is_neg_risk(trade.market, trade.direction):
-            log.info(f"Skipping neg-risk market: {trade.market['name'][:50]}")
-            return None
+            log.info(f"neg-risk market: {trade.market['name'][:50]} — updating CONDITIONAL allowance")
+            self._poly.update_conditional_allowance(token_id)
 
         # Pre-warm tick_size + fee_rate cache before the critical order path
         self._poly.warm_token_cache(token_id)
@@ -285,8 +285,7 @@ class ExecutionService:
             return None
 
         if self._poly.is_neg_risk(trade.market, trade.direction):
-            log.info(f"Skipping neg-risk market: {trade.market['name'][:50]}")
-            return None
+            log.info(f"neg-risk market (dry-run): {trade.market['name'][:50]} — would update CONDITIONAL allowance")
 
         fee = calc_fee(amount, trade.price, trade.order_type)
         new_budget = budget - amount - fee

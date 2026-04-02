@@ -3,7 +3,6 @@ Persistent set of market IDs to skip in future scans.
 Backed by discarded_markets.json. Thread-safe via atomic file writes.
 
 Reasons:
-  neg_risk     — market uses neg-risk contracts (unsupported)
   order_failed — CLOB order placement failed
   manual       — manually added
 """

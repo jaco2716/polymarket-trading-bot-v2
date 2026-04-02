@@ -10,7 +10,6 @@ import requests
 
 from config import CFG, CLOB_URL
 from clients.http import get
-import utils.discarded as discarded
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +88,18 @@ class PolymarketClient:
             log.warning(f"Could not fetch CLOB balance: {e} — proceeding with local budget")
             return float("inf")
 
+    def update_conditional_allowance(self, token_id: str) -> None:
+        """Update CLOB API's tracked allowance for a neg-risk CONDITIONAL token.
+        Also refreshes COLLATERAL so the exchange sees the current USDC balance."""
+        try:
+            from py_clob_client.clob_types import BalanceAllowanceParams, AssetType
+            client = self.get_client()
+            client.update_balance_allowance(params=BalanceAllowanceParams(asset_type=AssetType.CONDITIONAL, token_id=token_id))
+            client.update_balance_allowance(params=BalanceAllowanceParams(asset_type=AssetType.COLLATERAL))
+            log.debug(f"CONDITIONAL+COLLATERAL allowance updated for token {token_id[:16]}...")
+        except Exception as e:
+            log.warning(f"Could not update allowance for {token_id[:16]}...: {e}")
+
     def resolve_token_ids(self, market: dict) -> tuple[Optional[str], Optional[str]]:
         """Return (yes_token_id, no_token_id), falling back to CLOB API if needed."""
         yes_tid = market.get("yes_token_id")
@@ -124,10 +135,6 @@ class PolymarketClient:
             result = self.get_client().get_neg_risk(token_id)
             is_neg = bool(result)
             _neg_risk_cache[token_id] = is_neg
-            if is_neg:
-                market_id = market.get("id") or market.get("condition_id")
-                if market_id:
-                    discarded.add(market_id, "neg_risk")
             return is_neg
         except Exception:
             _neg_risk_cache[token_id] = False
@@ -198,10 +205,14 @@ class PolymarketClient:
         cancels the rest.  This avoids the 400 "fully filled" errors that FOK
         produces on thin order books.
         """
-        from py_clob_client.clob_types import MarketOrderArgs, OrderType
+        from py_clob_client.clob_types import MarketOrderArgs, OrderType, BalanceAllowanceParams, AssetType
         from py_clob_client.order_builder.constants import BUY, SELL
 
         client = self.get_client()
+        try:
+            client.update_balance_allowance(params=BalanceAllowanceParams(asset_type=AssetType.COLLATERAL))
+        except Exception as e:
+            log.warning(f"Could not refresh COLLATERAL allowance before order: {e}")
         side = BUY if direction == "yes" else SELL
 
         mo = MarketOrderArgs(

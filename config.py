@@ -27,6 +27,10 @@ CFG = {
     "PANDASCORE_API_KEY":  os.getenv("PANDASCORE_API_KEY", ""),   # esports (CS2, LoL, Valorant…)
     "API_FOOTBALL_KEY":    os.getenv("API_FOOTBALL_KEY", ""),     # football/soccer
 
+    # Optional real-time asset price integrations
+    # CoinGecko (crypto) needs no key — always active
+    "ALPHA_VANTAGE_KEY":   os.getenv("ALPHA_VANTAGE_KEY", ""),    # S&P 500, Nasdaq, Dow
+
     # Budget
     "STARTING_BUDGET":        float(os.getenv("STARTING_BUDGET",        "500")),
     "SHADOW_STARTING_BUDGET": float(os.getenv("SHADOW_STARTING_BUDGET", os.getenv("STARTING_BUDGET", "500"))),

@@ -14,6 +14,7 @@ from services.execution_service import TradeRequest
 from utils.fees import price_scaled_params
 from utils.news import fetch_news_headlines
 from utils.live_scores import fetch_live_scores, detect_sport
+from utils.market_prices import fetch_asset_context
 
 log = logging.getLogger(__name__)
 
@@ -47,10 +48,11 @@ class HaikuStrategy(Strategy):
             log.debug(f"[haiku] Skipping sports market (no live score found): {market['name'][:60]}")
             return None
 
-        # FETCH-BEFORE-ANALYZE: get fresh headlines right before analysis
-        headlines = fetch_news_headlines(market["name"])
+        # FETCH-BEFORE-ANALYZE: get fresh headlines and asset prices right before analysis
+        headlines    = fetch_news_headlines(market["name"])
+        asset_ctx    = fetch_asset_context(market["name"])
 
-        analysis = self._haiku.analyse(market, headlines, live_scores=live_scores, shadow=shadow)
+        analysis = self._haiku.analyse(market, headlines, live_scores=live_scores, asset_context=asset_ctx, shadow=shadow)
         time.sleep(0.5)  # rate limit courtesy
 
         if not analysis:

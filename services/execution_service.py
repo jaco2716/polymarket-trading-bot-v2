@@ -193,7 +193,7 @@ class ExecutionService:
         limit_price = trade.price + CFG["SLIPPAGE_PCT"]
 
         try:
-            result = self._poly.place_market_order(token_id, amount, trade.direction, limit_price)
+            result = self._poly.place_market_order(token_id, amount, limit_price)
             order_id = result["order_id"]
             if not order_id:
                 log.warning(f"No order_id in response for {trade.market['name'][:50]} — skipping")

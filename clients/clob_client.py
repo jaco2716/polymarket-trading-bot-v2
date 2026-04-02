@@ -190,7 +190,7 @@ class PolymarketClient:
         except Exception as e:
             log.debug(f"Cache warm failed for {token_id[:16]}…: {e}")
 
-    def place_market_order(self, token_id: str, amount: float, direction: str, price: float = 0.0) -> dict:
+    def place_market_order(self, token_id: str, amount: float, price: float = 0.0) -> dict:
         """Create and post a FAK (Fill-and-Kill / IOC) market order.
 
         Returns dict with order_id, status, and response.
@@ -206,14 +206,16 @@ class PolymarketClient:
         produces on thin order books.
         """
         from py_clob_client.clob_types import MarketOrderArgs, OrderType, BalanceAllowanceParams, AssetType
-        from py_clob_client.order_builder.constants import BUY, SELL
+        from py_clob_client.order_builder.constants import BUY
 
         client = self.get_client()
         try:
             client.update_balance_allowance(params=BalanceAllowanceParams(asset_type=AssetType.COLLATERAL))
         except Exception as e:
             log.warning(f"Could not refresh COLLATERAL allowance before order: {e}")
-        side = BUY if direction == "yes" else SELL
+        # Always BUY — the token_id already encodes direction (yes_token or no_token).
+        # Using SELL would attempt to short-sell tokens you don't hold, which the exchange rejects.
+        side = BUY
 
         mo = MarketOrderArgs(
             token_id=token_id,

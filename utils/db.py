@@ -96,6 +96,7 @@ def init_db() -> sqlite3.Connection:
         ("market_slug", "TEXT"),
         ("market_tags", "TEXT"),
         ("whale_size",  "REAL"),
+        ("confidence",  "REAL"),
     ]:
         try:
             con.execute(f"ALTER TABLE trades ADD COLUMN {col} {definition}")

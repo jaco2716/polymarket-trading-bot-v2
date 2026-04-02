@@ -123,8 +123,14 @@ def detect_sport(market_name: str, tags: list = None) -> Optional[str]:
         if lower.startswith(prefix):
             return "sports"
 
-    # Catch-all: any "X vs Y" market with a recognisable sports suffix
-    if " vs " in lower and any(s in lower for s in _GENERIC_SPORTS_SUBSTRINGS):
+    # Catch-all: any "X vs Y" or "X vs. Y" (American sports) market.
+    # Bare "Team A vs. Team B" with no suffix is still a sports matchup.
+    has_vs = " vs " in lower or " vs. " in lower
+    if has_vs and any(s in lower for s in _GENERIC_SPORTS_SUBSTRINGS):
+        return "sports"
+    # "vs." (dot) alone is a strong enough signal — American leagues never use
+    # this format for anything other than live game matchups.
+    if " vs. " in lower:
         return "sports"
 
     return None

@@ -120,8 +120,8 @@ class ExecutionService:
             INSERT INTO trades
                 (ts, market_id, market_name, token_id, direction, price, amount,
                  fee, order_type, tags, notes, end_date, liquidity, volume_24h,
-                 market_slug, market_tags, whale_size)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 market_slug, market_tags, whale_size, confidence)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             datetime.now(timezone.utc).isoformat(),
             trade.market["id"], trade.market["name"],
@@ -130,7 +130,7 @@ class ExecutionService:
             trade.notes, trade.market.get("end_date"),
             trade.market.get("liquidity"), trade.market.get("volume_24h"),
             trade.market.get("slug"), json.dumps(trade.market.get("tags") or []),
-            trade.whale_size,
+            trade.whale_size, trade.confidence,
         ))
         con.commit()
         self._budget.save("paper", new_budget)
@@ -215,15 +215,15 @@ class ExecutionService:
             INSERT INTO trades
                 (ts, market_id, market_name, token_id, direction, price, amount,
                  fee, order_type, tags, notes, mode, order_id,
-                 end_date, liquidity, volume_24h, market_slug, market_tags, whale_size)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 end_date, liquidity, volume_24h, market_slug, market_tags, whale_size, confidence)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             ts, trade.market["id"], trade.market["name"], token_id,
             trade.direction, limit_price, 0, 0, trade.order_type,
             json.dumps(trade.tags), "pending-fill-check", "live", order_id,
             trade.market.get("end_date"), trade.market.get("liquidity"),
             trade.market.get("volume_24h"), trade.market.get("slug"),
-            json.dumps(trade.market.get("tags") or []), trade.whale_size,
+            json.dumps(trade.market.get("tags") or []), trade.whale_size, trade.confidence,
         ))
         con.commit()
 
@@ -294,8 +294,8 @@ class ExecutionService:
             INSERT INTO trades
                 (ts, market_id, market_name, token_id, direction, price, amount,
                  fee, order_type, tags, notes, mode,
-                 end_date, liquidity, volume_24h, market_slug, market_tags, whale_size)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 end_date, liquidity, volume_24h, market_slug, market_tags, whale_size, confidence)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             datetime.now(timezone.utc).isoformat(),
             trade.market["id"], trade.market["name"], token_id,
@@ -303,7 +303,7 @@ class ExecutionService:
             json.dumps(trade.tags), trade.notes, "live-dry",
             trade.market.get("end_date"), trade.market.get("liquidity"),
             trade.market.get("volume_24h"), trade.market.get("slug"),
-            json.dumps(trade.market.get("tags") or []), trade.whale_size,
+            json.dumps(trade.market.get("tags") or []), trade.whale_size, trade.confidence,
         ))
         con.commit()
         self._budget.save("live", new_budget)

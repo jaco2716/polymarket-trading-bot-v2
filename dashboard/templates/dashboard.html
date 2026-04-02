@@ -218,14 +218,15 @@ function renderStatCards(ov) {
     const liveOpenAmt = ov.live_open_amount || 0;
     const liveBudget = ov.live_budget || 0;
     const liveTotal = liveBudget + liveOpenAmt;
+    const liveChange = ov.live_budget != null ? liveTotal - starting : null;
     cards.push({
       label: 'Live Budget',
       value: ov.live_budget != null ? `$${ov.live_budget.toFixed(2)}` : '—',
       valueCls: 'text-yellow-400',
-      sub: `${ov.live_wins || 0}W / ${ov.live_losses || 0}L  ·  ${ov.live_open_trades || 0} open`,
-      subCls: 'muted',
-      sub2: `Live P&L: ${sign(livePnl)}$${Math.abs(livePnl).toFixed(2)}`,
-      sub2Cls: pnlCls(livePnl),
+      sub: `${sign(liveChange ?? 0)}$${Math.abs(liveChange ?? 0).toFixed(2)} from $${starting}`,
+      subCls: pnlCls(liveChange),
+      sub2: `${ov.live_wins || 0}W / ${ov.live_losses || 0}L  ·  ${ov.live_open_trades || 0} open`,
+      sub2Cls: 'muted',
       sub3: `In open trades: $${liveOpenAmt.toFixed(2)}`,
       sub3Cls: 'muted',
       sub4: `Total value: $${liveTotal.toFixed(2)}`,

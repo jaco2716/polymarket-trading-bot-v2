@@ -12,8 +12,8 @@ from clients.anthropic_client import HaikuClient
 from strategies.base import Strategy
 from services.execution_service import TradeRequest
 from utils.fees import price_scaled_params
-from utils.filters import is_sports_matchup
 from utils.news import fetch_news_headlines
+from utils.live_scores import fetch_live_scores, detect_sport
 
 log = logging.getLogger(__name__)
 
@@ -38,14 +38,19 @@ class HaikuStrategy(Strategy):
         shadow: bool = False,
     ) -> Optional[TradeRequest]:
         """Evaluate one market. Returns TradeRequest if confidence threshold met."""
-        if CFG["HAIKU_SKIP_SPORTS"] and is_sports_matchup(market["name"]):
-            log.debug(f"[haiku] Skipping sports market: {market['name'][:60]}")
+        # Fetch live scores — required for any sports/esports market.
+        # If the market is a sports event but no live data is found, skip it:
+        # betting without knowing the current match state has no edge.
+        tags = market.get("tags") or []
+        live_scores = fetch_live_scores(market["name"], tags=tags)
+        if detect_sport(market["name"], tags=tags) and not live_scores:
+            log.debug(f"[haiku] Skipping sports market (no live score found): {market['name'][:60]}")
             return None
 
         # FETCH-BEFORE-ANALYZE: get fresh headlines right before analysis
         headlines = fetch_news_headlines(market["name"])
 
-        analysis = self._haiku.analyse(market, headlines, shadow=shadow)
+        analysis = self._haiku.analyse(market, headlines, live_scores=live_scores, shadow=shadow)
         time.sleep(0.5)  # rate limit courtesy
 
         if not analysis:

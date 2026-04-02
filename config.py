@@ -21,7 +21,11 @@ DISCARDED_FILE: str = "data/discarded_markets.json"
 
 CFG = {
     # Required
-    "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+    "ANTHROPIC_API_KEY":   os.getenv("ANTHROPIC_API_KEY", ""),
+
+    # Optional live score integrations
+    "PANDASCORE_API_KEY":  os.getenv("PANDASCORE_API_KEY", ""),   # esports (CS2, LoL, Valorant…)
+    "API_FOOTBALL_KEY":    os.getenv("API_FOOTBALL_KEY", ""),     # football/soccer
 
     # Budget
     "STARTING_BUDGET":        float(os.getenv("STARTING_BUDGET",        "500")),

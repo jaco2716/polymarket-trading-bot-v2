@@ -54,6 +54,14 @@ class HaikuStrategy(Strategy):
         asset_ctx    = fetch_asset_context(market["name"])
         sports_ctx   = fetch_sports_context(market["name"], tags=tags)
 
+        # Assemble all context lines fed to Haiku so they can be stored with the trade
+        context_lines = (
+            ([f"[live] {s}" for s in live_scores] if live_scores else []) +
+            ([f"[price] {s}" for s in asset_ctx]  if asset_ctx   else []) +
+            ([f"[sport] {s}" for s in sports_ctx] if sports_ctx  else []) +
+            ([f"[news] {h}"  for h in headlines]   if headlines   else [])
+        )
+
         analysis = self._haiku.analyse(market, headlines, live_scores=live_scores,
                                        asset_context=asset_ctx, sports_context=sports_ctx,
                                        shadow=shadow)
@@ -86,4 +94,6 @@ class HaikuStrategy(Strategy):
             notes=analysis.get("reasoning", ""),
             confidence=conf,
             strategy="haiku-analyse",
+            haiku_context=context_lines or None,
+            haiku_analysis=analysis,
         )

@@ -96,7 +96,9 @@ def init_db() -> sqlite3.Connection:
         ("market_slug", "TEXT"),
         ("market_tags", "TEXT"),
         ("whale_size",  "REAL"),
-        ("confidence",  "REAL"),
+        ("confidence",     "REAL"),
+        ("haiku_context",  "TEXT"),  # JSON array of context lines fed to Haiku
+        ("haiku_analysis", "TEXT"),  # full JSON response from Haiku
     ]:
         try:
             con.execute(f"ALTER TABLE trades ADD COLUMN {col} {definition}")

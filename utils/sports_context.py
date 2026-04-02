@@ -41,6 +41,7 @@ _LIQUIPEDIA_HEADERS = {
 
 def _fetch_espn(sport: str, league: str) -> dict:
     """Fetch and cache ESPN injuries + recent scoreboard for a league."""
+    global _espn_nba_cache, _espn_nhl_cache
     cache = _espn_nba_cache if league == "nba" else _espn_nhl_cache
     now = time.time()
     if now - cache[0] < _CONTEXT_TTL:
@@ -101,10 +102,8 @@ def _fetch_espn(sport: str, league: str) -> dict:
         log.debug(f"ESPN {league} scoreboard fetch error: {e}")
 
     if league == "nba":
-        global _espn_nba_cache
         _espn_nba_cache = (now, result)
     else:
-        global _espn_nhl_cache
         _espn_nhl_cache = (now, result)
 
     log.debug(f"ESPN {league}: cached {len(result['injuries'])} injury teams, "

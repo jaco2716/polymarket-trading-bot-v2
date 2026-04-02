@@ -35,6 +35,8 @@ class TradeRequest:
         confidence: Optional[float] = None,
         whale_size: Optional[float] = None,
         strategy: str = "",
+        haiku_context: Optional[list] = None,
+        haiku_analysis: Optional[dict] = None,
     ):
         self.market = market
         self.direction = direction
@@ -45,6 +47,8 @@ class TradeRequest:
         self.confidence = confidence
         self.whale_size = whale_size
         self.strategy = strategy
+        self.haiku_context = haiku_context    # context lines fed to Haiku
+        self.haiku_analysis = haiku_analysis  # full Haiku JSON response
 
 
 class ExecutionService:
@@ -120,8 +124,8 @@ class ExecutionService:
             INSERT INTO trades
                 (ts, market_id, market_name, token_id, direction, price, amount,
                  fee, order_type, tags, notes, end_date, liquidity, volume_24h,
-                 market_slug, market_tags, whale_size, confidence)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 market_slug, market_tags, whale_size, confidence, haiku_context, haiku_analysis)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             datetime.now(timezone.utc).isoformat(),
             trade.market["id"], trade.market["name"],
@@ -131,6 +135,8 @@ class ExecutionService:
             trade.market.get("liquidity"), trade.market.get("volume_24h"),
             trade.market.get("slug"), json.dumps(trade.market.get("tags") or []),
             trade.whale_size, trade.confidence,
+            json.dumps(trade.haiku_context) if trade.haiku_context else None,
+            json.dumps(trade.haiku_analysis) if trade.haiku_analysis else None,
         ))
         con.commit()
         self._budget.save("paper", new_budget)
@@ -215,8 +221,9 @@ class ExecutionService:
             INSERT INTO trades
                 (ts, market_id, market_name, token_id, direction, price, amount,
                  fee, order_type, tags, notes, mode, order_id,
-                 end_date, liquidity, volume_24h, market_slug, market_tags, whale_size, confidence)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 end_date, liquidity, volume_24h, market_slug, market_tags, whale_size,
+                 confidence, haiku_context, haiku_analysis)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             ts, trade.market["id"], trade.market["name"], token_id,
             trade.direction, limit_price, 0, 0, trade.order_type,
@@ -224,6 +231,8 @@ class ExecutionService:
             trade.market.get("end_date"), trade.market.get("liquidity"),
             trade.market.get("volume_24h"), trade.market.get("slug"),
             json.dumps(trade.market.get("tags") or []), trade.whale_size, trade.confidence,
+            json.dumps(trade.haiku_context) if trade.haiku_context else None,
+            json.dumps(trade.haiku_analysis) if trade.haiku_analysis else None,
         ))
         con.commit()
 
@@ -294,8 +303,9 @@ class ExecutionService:
             INSERT INTO trades
                 (ts, market_id, market_name, token_id, direction, price, amount,
                  fee, order_type, tags, notes, mode,
-                 end_date, liquidity, volume_24h, market_slug, market_tags, whale_size, confidence)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 end_date, liquidity, volume_24h, market_slug, market_tags, whale_size,
+                 confidence, haiku_context, haiku_analysis)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             datetime.now(timezone.utc).isoformat(),
             trade.market["id"], trade.market["name"], token_id,
@@ -304,6 +314,8 @@ class ExecutionService:
             trade.market.get("end_date"), trade.market.get("liquidity"),
             trade.market.get("volume_24h"), trade.market.get("slug"),
             json.dumps(trade.market.get("tags") or []), trade.whale_size, trade.confidence,
+            json.dumps(trade.haiku_context) if trade.haiku_context else None,
+            json.dumps(trade.haiku_analysis) if trade.haiku_analysis else None,
         ))
         con.commit()
         self._budget.save("live", new_budget)

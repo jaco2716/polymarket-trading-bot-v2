@@ -62,12 +62,13 @@ _OTHER_SPORTS_PREFIXES = {
     "rugby:", "nrl:", "super rugby",
     # Combat sports / racing
     "ufc:", "boxing:", "formula 1:", "f1:", "motogp:",
+    # Spread/handicap/moneyline prefixes used by Polymarket for US sports
+    "spread:", "o/u ", ": o/u", "moneyline:",
     # Generic matchup patterns caught by prefix
     "will ", "who wins",
 }
 
-# Suffixes / substrings that indicate a head-to-head sports match for any sport
-# These fire only when the name contains " vs " (no API coverage → always skip)
+# Substrings that identify a sports market regardless of whether " vs " is present
 _GENERIC_SPORTS_SUBSTRINGS = {
     " winner", "- game 1", "- game 2", "- map 1", "- map 2",
     "(bo1)", "(bo2)", "(bo3)", "(bo5)",
@@ -123,14 +124,17 @@ def detect_sport(market_name: str, tags: list = None) -> Optional[str]:
         if lower.startswith(prefix):
             return "sports"
 
-    # Catch-all: any "X vs Y" or "X vs. Y" (American sports) market.
-    # Bare "Team A vs. Team B" with no suffix is still a sports matchup.
-    has_vs = " vs " in lower or " vs. " in lower
-    if has_vs and any(s in lower for s in _GENERIC_SPORTS_SUBSTRINGS):
+    # Sports substrings that are conclusive on their own (no "vs" needed)
+    # e.g. "Spread: Thunder (-9.5)", "O/U 220.5: Lakers vs Celtics"
+    if any(s in lower for s in _GENERIC_SPORTS_SUBSTRINGS):
         return "sports"
-    # "vs." (dot) alone is a strong enough signal — American leagues never use
-    # this format for anything other than live game matchups.
+
+    # "X vs Y" or "X vs. Y" — bare matchup with no other signal
+    # "vs." (dot) is American sports format; strong enough signal alone
     if " vs. " in lower:
+        return "sports"
+    # "vs" without dot still needs a suffix to avoid false positives
+    if " vs " in lower and any(s in lower for s in _GENERIC_SPORTS_SUBSTRINGS):
         return "sports"
 
     return None

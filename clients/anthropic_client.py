@@ -66,8 +66,8 @@ Rules:
 - Do not have a directional bias — evaluate YES and NO equally based on evidence alone.
 - Prefer "maker" orders (limit orders) to save on fees."""
 
-    def _build_user_prompt(self, market: dict, headlines: list[str], live_scores: list[str] = None, asset_context: list[str] = None) -> str:
-        """Build the user message with market data, live scores, asset prices, and news."""
+    def _build_user_prompt(self, market: dict, headlines: list[str], live_scores: list[str] = None, asset_context: list[str] = None, sports_context: list[str] = None) -> str:
+        """Build the user message with market data, live scores, asset prices, sports context, and news."""
         scores_section = ""
         if live_scores:
             scores_section = "\nLive match status:\n" + "\n".join(f"- {s}" for s in live_scores) + "\n"
@@ -75,6 +75,10 @@ Rules:
         asset_section = ""
         if asset_context:
             asset_section = "\nReal-time market data:\n" + "\n".join(f"- {l}" for l in asset_context) + "\n"
+
+        sports_section = ""
+        if sports_context:
+            sports_section = "\nTeam context (injuries, recent form):\n" + "\n".join(f"- {l}" for l in sports_context) + "\n"
 
         news_section = ""
         if headlines:
@@ -89,12 +93,13 @@ Rules:
             f"Category tags: {', '.join(str(t) for t in market.get('tags', []))}\n"
             f"{scores_section}"
             f"{asset_section}"
+            f"{sports_section}"
             f"{news_section}\n"
             "Is there a positive edge here? Consider: does the real-time data, live score, "
-            "or news suggest the market is mispriced? If you have no strong signal, say edge:false."
+            "team context, or news suggest the market is mispriced? If you have no strong signal, say edge:false."
         )
 
-    def analyse(self, market: dict, headlines: list[str], live_scores: list[str] = None, asset_context: list[str] = None, shadow: bool = False) -> Optional[dict]:
+    def analyse(self, market: dict, headlines: list[str], live_scores: list[str] = None, asset_context: list[str] = None, sports_context: list[str] = None, shadow: bool = False) -> Optional[dict]:
         """
         Ask Haiku for edge analysis on a market.
         Returns parsed dict {edge, direction, confidence, reasoning, order_type} or None.
@@ -102,7 +107,7 @@ Rules:
         """
         client = self._get_client()
         system = self._build_system_prompt(shadow)
-        prompt = self._build_user_prompt(market, headlines, live_scores=live_scores, asset_context=asset_context)
+        prompt = self._build_user_prompt(market, headlines, live_scores=live_scores, asset_context=asset_context, sports_context=sports_context)
 
         try:
             resp = client.messages.create(
